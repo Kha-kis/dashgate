@@ -94,13 +94,15 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Template directory (default: /app/templates for Docker, override with TEMPLATES_PATH)
+	app.TemplateDir = "/app/templates"
+	if dir := os.Getenv("TEMPLATES_PATH"); dir != "" {
+		app.TemplateDir = dir
+	}
+
 	// Dev mode: reload templates from disk on every request
 	app.DevMode = os.Getenv("DEV_MODE") == "true"
-	app.TemplateDir = "/app/templates"
 	if app.DevMode {
-		if dir := os.Getenv("TEMPLATES_PATH"); dir != "" {
-			app.TemplateDir = dir
-		}
 		log.Printf("Dev mode enabled — templates will reload from %s on every request", app.TemplateDir)
 	}
 
@@ -151,12 +153,10 @@ func main() {
 	mux.HandleFunc("/manifest.json", handlers.ManifestHandler(app))
 	mux.HandleFunc("/sw.js", handlers.ServiceWorkerHandler(app))
 
-	// Static files
+	// Static files (default: /app/static for Docker, override with STATIC_PATH)
 	staticDir := "/app/static"
-	if app.DevMode {
-		if dir := os.Getenv("STATIC_PATH"); dir != "" {
-			staticDir = dir
-		}
+	if dir := os.Getenv("STATIC_PATH"); dir != "" {
+		staticDir = dir
 	}
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(neuteredFileSystem{http.Dir(staticDir)})))
 

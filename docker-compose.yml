@@ -2,7 +2,7 @@ services:
   dashgate:
     build: .
     # image: khak1s/dashgate:latest           # Docker Hub — use after first release
-    # image: ghcr.io/OWNER/dashgate:latest    # GHCR — use after first release
+    # image: ghcr.io/kha-kis/dashgate:latest   # GHCR — use after first release
     container_name: dashgate
     restart: unless-stopped
     ports:
