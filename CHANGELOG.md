@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nginx comments containing braces no longer corrupt block extraction
 - Include error messages no longer leak filesystem paths
 - Docker build now strips `v` prefix from version tag
+- Custom icons in `/config/icons/` now take priority over bundled icons with cascading fallback (#1)
 
 ### Security
 - Symlinks skipped during icon seeding to prevent sensitive file exposure

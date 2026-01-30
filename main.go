@@ -190,8 +190,24 @@ func main() {
 		log.Printf("Warning: icons directory %s does not exist, skipping icon seeding", app.IconsPath)
 	}
 
-	// Serve icons from persistent ICONS_PATH (longest prefix match wins over /static/)
-	mux.Handle("/static/icons/", http.StripPrefix("/static/icons/", http.FileServer(neuteredFileSystem{http.Dir(app.IconsPath)})))
+	// Serve icons with cascading lookup: persistent ICONS_PATH first, then bundled fallback.
+	// This ensures user overrides in /config/icons/ take priority, while bundled icons
+	// from /app/static/icons/ remain available as a fallback.
+	bundledIconsFS := http.Dir(filepath.Join(staticDir, "icons"))
+	persistentIconsFS := http.Dir(app.IconsPath)
+	persistentIconServer := http.FileServer(neuteredFileSystem{persistentIconsFS})
+	bundledIconServer := http.FileServer(neuteredFileSystem{bundledIconsFS})
+	mux.Handle("/static/icons/", http.StripPrefix("/static/icons/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try persistent path first
+		f, err := persistentIconsFS.Open(r.URL.Path)
+		if err == nil {
+			f.Close()
+			persistentIconServer.ServeHTTP(w, r)
+			return
+		}
+		// Fall back to bundled icons
+		bundledIconServer.ServeHTTP(w, r)
+	})))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(neuteredFileSystem{http.Dir(staticDir)})))
 
 	// Auth API routes
