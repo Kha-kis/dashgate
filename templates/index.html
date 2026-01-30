@@ -1611,15 +1611,15 @@ environment:
                                 </svg>
                                 Download Backup
                             </button>
-                            <label class="settings-btn" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <button class="settings-btn" onclick="document.getElementById('restoreFileInput').click()">
                                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
                                     <polyline points="17 8 12 3 7 8"/>
                                     <line x1="12" y1="3" x2="12" y2="15"/>
                                 </svg>
                                 Restore from Backup
-                                <input type="file" accept=".json" onchange="restoreFromBackup(this)" style="display: none;">
-                            </label>
+                            </button>
+                            <input type="file" id="restoreFileInput" accept=".json" onchange="restoreFromBackup(this)" style="display: none;">
                         </div>
                         <p class="settings-desc" style="margin-top: 12px; font-size: 11px; color: var(--orange);">
                             Note: Passwords and secrets are not included in backups for security reasons.
@@ -1840,14 +1840,12 @@ environment:
                     <label>Icon</label>
                     <div class="icon-selector">
                         <div class="icon-preview" id="iconPreview">
-                            <span style="color: var(--text-tertiary)">No icon</span>
+                            <span>No icon</span>
                         </div>
                         <div class="icon-actions">
-                            <button class="settings-btn" onclick="openIconSelector()" style="flex: 1;">Choose Icon</button>
-                            <label class="settings-btn" style="flex: 1; text-align: center; cursor: pointer;">
-                                Upload
-                                <input type="file" id="iconUploadInput" accept=".svg,.png,.jpg,.jpeg,.webp,.ico" style="display: none;" onchange="uploadIcon(event)">
-                            </label>
+                            <button type="button" class="icon-btn" onclick="openIconSelector()">Choose Icon</button>
+                            <button type="button" class="icon-btn" onclick="document.getElementById('iconUploadInput').click()">Upload</button>
+                            <input type="file" id="iconUploadInput" accept=".svg,.png,.jpg,.jpeg,.webp,.ico" style="display: none;" onchange="uploadIcon(event)">
                         </div>
                         <input type="hidden" id="appConfigIcon">
                     </div>
@@ -1881,11 +1879,27 @@ environment:
                 </button>
             </div>
             <div class="admin-modal-body">
+                <div class="icon-picker-tabs">
+                    <button class="icon-picker-tab active" data-icon-tab="local" onclick="switchIconTab('local')">Local</button>
+                    <button class="icon-picker-tab" data-icon-tab="dashboard" onclick="switchIconTab('dashboard')">Dashboard Icons</button>
+                </div>
                 <div class="admin-search" style="margin-bottom: 12px;">
                     <input type="text" id="iconSearchInput" placeholder="Search icons..." class="admin-search-input" oninput="filterIcons()">
                 </div>
-                <div class="icon-grid" id="iconGrid">
-                    <div class="admin-loading">Loading icons...</div>
+                <div class="icon-panel active" id="localIconPanel">
+                    <div class="icon-grid" id="iconGrid">
+                        <div class="admin-loading">Loading icons...</div>
+                    </div>
+                </div>
+                <div class="icon-panel" id="dashboardIconPanel">
+                    <div class="icon-grid" id="dashboardIconGrid">
+                        <div class="admin-empty">Search for an icon above</div>
+                    </div>
+                    <div class="icon-grid-info" id="dashboardIconInfo"></div>
+                    <div class="icon-grid-attribution">
+                        Icons from <a href="https://github.com/homarr-labs/dashboard-icons" target="_blank" rel="noopener">homarr-labs/dashboard-icons</a> (Apache-2.0).
+                        All trademarks are property of their respective owners.
+                    </div>
                 </div>
             </div>
             <div class="admin-modal-footer">
@@ -1994,11 +2008,11 @@ environment:
                         <label>Icon Override</label>
                         <div class="icon-selector">
                             <div class="icon-preview" id="discoveredIconPreview">
-                                <span style="color: var(--text-tertiary)">No icon override</span>
+                                <span>No icon override</span>
                             </div>
                             <div class="icon-actions">
-                                <button class="settings-btn" onclick="openDiscoveredIconSelector()" style="flex: 1;">Choose Icon</button>
-                                <button class="settings-btn" onclick="clearDiscoveredIcon()" style="flex: 1;">Clear</button>
+                                <button type="button" class="icon-btn" onclick="openDiscoveredIconSelector()">Choose Icon</button>
+                                <button type="button" class="icon-btn" onclick="clearDiscoveredIcon()">Clear</button>
                             </div>
                             <input type="hidden" id="discoveredAppIconOverride">
                         </div>

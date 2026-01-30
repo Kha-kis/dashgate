@@ -54,7 +54,7 @@
                        </div>`
                     : '<div class="admin-item-meta" style="color: var(--orange)">No groups</div>';
 
-                const safeName = app.name.replace(/'/g, "\\'");
+                const safeName = escapeHtml(app.name).replace(/'/g, "&#39;");
 
                 if (app._source === 'discovered') {
                     return `
@@ -267,22 +267,49 @@
         }
 
         // Icon Management
+        let dashboardIconsCache = null;
+        let activeIconTab = 'local';
+
         function updateIconPreview(iconName) {
             const preview = document.getElementById('iconPreview');
             if (iconName) {
-                preview.innerHTML = `<img src="/static/icons/${escapeHtml(iconName)}" alt="">`;
+                preview.innerHTML = `<img src="/static/icons/${escapeHtml(iconName)}" alt="${escapeHtml(iconName)}">`;
             } else {
-                preview.innerHTML = '<span style="color: var(--text-tertiary)">No icon</span>';
+                preview.innerHTML = '<span>No icon</span>';
             }
         }
 
         function openIconSelector() {
             renderIconGrid();
+            if (activeIconTab === 'dashboard') {
+                renderDashboardIconGrid();
+            }
+            // Restore active tab state
+            document.querySelectorAll('.icon-picker-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.iconTab === activeIconTab);
+            });
+            document.getElementById('localIconPanel').classList.toggle('active', activeIconTab === 'local');
+            document.getElementById('dashboardIconPanel').classList.toggle('active', activeIconTab === 'dashboard');
             document.getElementById('iconSelectorModal').classList.add('open');
         }
 
         function closeIconSelector() {
             document.getElementById('iconSelectorModal').classList.remove('open');
+        }
+
+        function switchIconTab(tab) {
+            activeIconTab = tab;
+            document.querySelectorAll('.icon-picker-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.iconTab === tab);
+            });
+            document.getElementById('localIconPanel').classList.toggle('active', tab === 'local');
+            document.getElementById('dashboardIconPanel').classList.toggle('active', tab === 'dashboard');
+
+            if (tab === 'local') {
+                renderIconGrid();
+            } else {
+                loadDashboardIcons().then(() => renderDashboardIconGrid());
+            }
         }
 
         function renderIconGrid() {
@@ -306,8 +333,95 @@
             `).join('');
         }
 
+        async function loadDashboardIcons() {
+            if (dashboardIconsCache) return;
+            const grid = document.getElementById('dashboardIconGrid');
+            grid.innerHTML = '<div class="admin-loading">Loading icons...</div>';
+            try {
+                const resp = await fetch('/api/admin/config/icons/dashboard-icons', { credentials: 'include' });
+                if (resp.ok) dashboardIconsCache = await resp.json();
+            } catch (e) {
+                grid.innerHTML = '<div class="admin-empty">Failed to load icons</div>';
+            }
+        }
+
+        function renderDashboardIconGrid() {
+            const container = document.getElementById('dashboardIconGrid');
+            const info = document.getElementById('dashboardIconInfo');
+            const searchTerm = document.getElementById('iconSearchInput')?.value.toLowerCase() || '';
+
+            if (!dashboardIconsCache) {
+                container.innerHTML = '<div class="admin-empty">Failed to load icons</div>';
+                info.textContent = '';
+                return;
+            }
+
+            if (searchTerm.length < 1) {
+                container.innerHTML = '<div class="admin-empty">Search for an icon above</div>';
+                info.textContent = dashboardIconsCache.length + ' icons available';
+                return;
+            }
+
+            const filtered = dashboardIconsCache.filter(n => n.toLowerCase().includes(searchTerm));
+            const maxDisplay = 100;
+            const displayed = filtered.slice(0, maxDisplay);
+
+            if (displayed.length === 0) {
+                container.innerHTML = '<div class="admin-empty">No icons found</div>';
+                info.textContent = '';
+                return;
+            }
+
+            info.textContent = filtered.length > maxDisplay
+                ? `Showing ${maxDisplay} of ${filtered.length} results`
+                : `${filtered.length} result${filtered.length !== 1 ? 's' : ''}`;
+
+            container.innerHTML = displayed.map(name => `
+                <div class="icon-grid-item" onclick="selectDashboardIcon('${escapeHtml(name)}')" title="${escapeHtml(name)}">
+                    <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/${encodeURIComponent(name)}.svg" loading="lazy" alt="${escapeHtml(name)}">
+                </div>
+            `).join('');
+        }
+
+        async function selectDashboardIcon(name) {
+            const items = document.querySelectorAll('#dashboardIconGrid .icon-grid-item');
+            items.forEach(el => {
+                if (el.getAttribute('title') === name) {
+                    el.style.opacity = '0.5';
+                    el.style.pointerEvents = 'none';
+                }
+            });
+            try {
+                const resp = await fetch('/api/admin/config/icons/download', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+                if (!adminState.icons.includes(data.filename)) {
+                    adminState.icons.push(data.filename);
+                }
+                selectIcon(data.filename);
+                showToast('Icon added');
+            } catch (e) {
+                showToast('Error: ' + e.message);
+                items.forEach(el => {
+                    if (el.getAttribute('title') === name) {
+                        el.style.opacity = '';
+                        el.style.pointerEvents = '';
+                    }
+                });
+            }
+        }
+
         function filterIcons() {
-            renderIconGrid();
+            if (activeIconTab === 'local') {
+                renderIconGrid();
+            } else {
+                renderDashboardIconGrid();
+            }
         }
 
         function selectIcon(iconName) {

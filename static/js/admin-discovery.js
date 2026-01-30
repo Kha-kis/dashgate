@@ -756,9 +756,9 @@
         function updateDiscoveredIconPreview(iconName) {
             const preview = document.getElementById('discoveredIconPreview');
             if (iconName) {
-                preview.innerHTML = `<img src="/static/icons/${escapeHtml(iconName)}" alt="${escapeHtml(iconName)}" style="max-width:40px;max-height:40px;object-fit:contain;">`;
+                preview.innerHTML = `<img src="/static/icons/${escapeHtml(iconName)}" alt="${escapeHtml(iconName)}">`;
             } else {
-                preview.innerHTML = '<span style="color: var(--text-tertiary)">No icon override</span>';
+                preview.innerHTML = '<span>No icon override</span>';
             }
         }
 

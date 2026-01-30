@@ -2,13 +2,17 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"dashgate/internal/config"
 	"dashgate/internal/health"
@@ -514,6 +518,30 @@ func AdminIconsHandler(app *server.App) http.HandlerFunc {
 	}
 }
 
+// validateSVGContent checks SVG content for dangerous XSS patterns.
+func validateSVGContent(content []byte) error {
+	contentStr := strings.ToLower(string(content))
+	dangerousPatterns := []string{
+		"<script", "javascript:", "vbscript:", "data:text/html", "data:image/svg+xml",
+		"onerror", "onload", "onclick", "onmouseover", "onmouseout",
+		"onfocus", "onblur", "oninput", "onchange", "onsubmit",
+		"onkeydown", "onkeyup", "onkeypress", "onmousedown", "onmouseup",
+		"ondblclick", "oncontextmenu", "ondrag", "ondragend", "ondragenter",
+		"ondragleave", "ondragover", "ondragstart", "ondrop", "onscroll",
+		"onwheel", "oncopy", "oncut", "onpaste", "onanimationend",
+		"onanimationstart", "ontransitionend", "onresize", "ontoggle",
+		"onbegin", "onend", "onrepeat",
+		"<foreignobject", "<iframe", "<embed", "<object", "<handler",
+		"expression(",
+	}
+	for _, pattern := range dangerousPatterns {
+		if strings.Contains(contentStr, pattern) {
+			return fmt.Errorf("SVG contains potentially unsafe content: %s", pattern)
+		}
+	}
+	return nil
+}
+
 // AdminIconUploadHandler handles icon file uploads.
 func AdminIconUploadHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -550,36 +578,15 @@ func AdminIconUploadHandler(app *server.App) http.HandlerFunc {
 
 		// SVG XSS validation
 		if ext == ".svg" {
-			// Read file content and check for dangerous patterns
 			content, err := io.ReadAll(file)
 			if err != nil {
 				http.Error(w, "Failed to read file", http.StatusInternalServerError)
 				return
 			}
-			contentStr := strings.ToLower(string(content))
-			// Block script tags, event handlers, and dangerous elements/attributes
-			dangerousPatterns := []string{
-				"<script", "javascript:", "vbscript:", "data:text/html",
-				// Event handlers
-				"onerror", "onload", "onclick", "onmouseover", "onmouseout",
-				"onfocus", "onblur", "oninput", "onchange", "onsubmit",
-				"onkeydown", "onkeyup", "onkeypress", "onmousedown", "onmouseup",
-				"ondblclick", "oncontextmenu", "ondrag", "ondragend", "ondragenter",
-				"ondragleave", "ondragover", "ondragstart", "ondrop", "onscroll",
-				"onwheel", "oncopy", "oncut", "onpaste", "onanimationend",
-				"onanimationstart", "ontransitionend", "onresize", "ontoggle",
-				// Dangerous SVG elements
-				"<foreignobject", "<set ", "<animate ", "xlink:href",
-				// CSS-based attacks
-				"expression(", "url(", "@import",
+			if err := validateSVGContent(content); err != nil {
+				http.Error(w, "SVG contains potentially unsafe content", http.StatusBadRequest)
+				return
 			}
-			for _, pattern := range dangerousPatterns {
-				if strings.Contains(contentStr, pattern) {
-					http.Error(w, "SVG contains potentially unsafe content", http.StatusBadRequest)
-					return
-				}
-			}
-			// Write the already-read content instead of seeking (more reliable for multipart files)
 			dstPath := filepath.Join(app.IconsPath, filename)
 			cleanDst := filepath.Clean(dstPath)
 			cleanBase := filepath.Clean(app.IconsPath)
@@ -622,5 +629,149 @@ func AdminIconUploadHandler(app *server.App) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"filename": filename, "status": "uploaded"})
+	}
+}
+
+// Dashboard icons cache
+var (
+	dashboardIconsCache     []string
+	dashboardIconsCacheTime time.Time
+	dashboardIconsMu        sync.Mutex
+	dashboardIconsCacheTTL  = 24 * time.Hour
+	validIconName           = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+)
+
+// AdminDashboardIconsHandler returns the list of available icons from dashboard-icons.
+func AdminDashboardIconsHandler(app *server.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		dashboardIconsMu.Lock()
+		if dashboardIconsCache != nil && time.Since(dashboardIconsCacheTime) < dashboardIconsCacheTTL {
+			cached := dashboardIconsCache
+			dashboardIconsMu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(cached)
+			return
+		}
+		dashboardIconsMu.Unlock()
+
+		resp, err := app.HTTPClient.Get("https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/tree.json")
+		if err != nil {
+			log.Printf("Error fetching dashboard icons index: %v", err)
+			http.Error(w, "Failed to fetch icon index", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			http.Error(w, "Failed to fetch icon index", http.StatusBadGateway)
+			return
+		}
+
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 5<<20))
+		if err != nil {
+			http.Error(w, "Failed to read icon index", http.StatusBadGateway)
+			return
+		}
+
+		var tree map[string][]string
+		if err := json.Unmarshal(body, &tree); err != nil {
+			http.Error(w, "Failed to parse icon index", http.StatusBadGateway)
+			return
+		}
+
+		svgList := tree["svg"]
+		names := make([]string, 0, len(svgList))
+		for _, entry := range svgList {
+			name := strings.TrimSuffix(entry, ".svg")
+			if name != "" {
+				names = append(names, name)
+			}
+		}
+
+		dashboardIconsMu.Lock()
+		dashboardIconsCache = names
+		dashboardIconsCacheTime = time.Now()
+		dashboardIconsMu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(names)
+	}
+}
+
+// AdminIconDownloadHandler downloads an icon from dashboard-icons and saves it locally.
+func AdminIconDownloadHandler(app *server.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if req.Name == "" || !validIconName.MatchString(req.Name) {
+			http.Error(w, "Invalid icon name", http.StatusBadRequest)
+			return
+		}
+
+		iconURL := "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/" + req.Name + ".svg"
+		resp, err := app.HTTPClient.Get(iconURL)
+		if err != nil {
+			log.Printf("Error downloading dashboard icon %s: %v", req.Name, err)
+			http.Error(w, "Failed to download icon", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			http.Error(w, "Icon not found", http.StatusNotFound)
+			return
+		}
+
+		content, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if err != nil {
+			http.Error(w, "Failed to read icon", http.StatusBadGateway)
+			return
+		}
+
+		ct := resp.Header.Get("Content-Type")
+		if !strings.Contains(ct, "svg") && !strings.Contains(ct, "xml") && !strings.Contains(ct, "octet-stream") {
+			http.Error(w, "Unexpected content type", http.StatusBadRequest)
+			return
+		}
+
+		if err := validateSVGContent(content); err != nil {
+			log.Printf("Dashboard icon %s failed SVG validation: %v", req.Name, err)
+			http.Error(w, "Icon failed safety validation", http.StatusBadRequest)
+			return
+		}
+
+		filename := req.Name + ".svg"
+		dstPath := filepath.Join(app.IconsPath, filename)
+		cleanDst := filepath.Clean(dstPath)
+		cleanBase := filepath.Clean(app.IconsPath)
+		if !strings.HasPrefix(cleanDst, cleanBase) {
+			http.Error(w, "Invalid icon name", http.StatusBadRequest)
+			return
+		}
+
+		if err := os.WriteFile(dstPath, content, 0644); err != nil {
+			log.Printf("Error saving dashboard icon %s: %v", req.Name, err)
+			http.Error(w, "Failed to save icon", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"filename": filename, "status": "downloaded"})
 	}
 }

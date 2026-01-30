@@ -248,6 +248,8 @@ func main() {
 	mux.HandleFunc("/api/admin/config/categories", auth.RequireAdmin(app, handlers.AdminCategoriesHandler(app)))
 	mux.HandleFunc("/api/admin/config/icons", auth.RequireAdmin(app, handlers.AdminIconsHandler(app)))
 	mux.HandleFunc("/api/admin/config/icons/upload", auth.RequireAdmin(app, handlers.AdminIconUploadHandler(app)))
+	mux.HandleFunc("/api/admin/config/icons/dashboard-icons", auth.RequireAdmin(app, handlers.AdminDashboardIconsHandler(app)))
+	mux.HandleFunc("/api/admin/config/icons/download", auth.RequireAdmin(app, handlers.AdminIconDownloadHandler(app)))
 
 	// Dependencies API
 	mux.HandleFunc("/api/dependencies", handlers.DependenciesHandler(app))
