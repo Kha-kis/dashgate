@@ -2,6 +2,7 @@ package health
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -10,7 +11,18 @@ import (
 	"dashgate/internal/server"
 )
 
+// isHealthy returns true if the HTTP status code indicates the service is running.
+// 2xx/3xx are healthy, and 401/403 count as online (service is up but requires auth).
+func isHealthy(statusCode int) bool {
+	if statusCode >= 200 && statusCode < 400 {
+		return true
+	}
+	return statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden
+}
+
 // CheckHealth performs a HEAD request against the given URL and returns "online" or "offline".
+// Some apps (e.g. File Browser) don't handle HEAD requests properly, so if HEAD returns a
+// non-success status we fall back to GET before declaring the service offline.
 // This is the ONLY place where InsecureClient (TLS skip verify) is used, because health
 // checks need to reach services with self-signed certificates.
 func CheckHealth(app *server.App, url string) string {
@@ -26,15 +38,31 @@ func CheckHealth(app *server.App, url string) string {
 	if err != nil {
 		return "offline"
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 
-	// 2xx and 3xx indicate the service is reachable and responding.
-	// 401/403 also count as "online" since the service is running but requires auth.
-	// Other 4xx/5xx are treated as offline.
-	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+	if isHealthy(resp.StatusCode) {
 		return "online"
 	}
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+
+	// HEAD failed with a non-success status — retry with GET as a fallback.
+	// Use a fresh timeout so the GET attempt gets its own full window.
+	getCtx, getCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer getCancel()
+
+	req, err = http.NewRequestWithContext(getCtx, "GET", url, nil)
+	if err != nil {
+		return "offline"
+	}
+
+	resp, err = app.InsecureClient.Do(req)
+	if err != nil {
+		return "offline"
+	}
+	// Drain a small amount to allow connection reuse, then close.
+	io.CopyN(io.Discard, resp.Body, 4096)
+	resp.Body.Close()
+
+	if isHealthy(resp.StatusCode) {
 		return "online"
 	}
 	return "offline"

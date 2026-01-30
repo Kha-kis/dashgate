@@ -1,5 +1,5 @@
 // Service Worker for DashGate PWA
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const STATIC_CACHE = `dashgate-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dashgate-dynamic-${CACHE_VERSION}`;
 const OFFLINE_URL = '/offline.html';
@@ -187,8 +187,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'DashGate', {
       body: data.body,
-      icon: '/static/icons/dashgate-192.png',
-      badge: '/static/icons/dashgate-192.png'
+      icon: '/static/branding/dashgate-192.png',
+      badge: '/static/branding/dashgate-192.png'
     })
   );
 });

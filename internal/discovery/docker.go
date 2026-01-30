@@ -76,17 +76,18 @@ func StartDockerDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopDockerDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	defer app.DiscoveryMu.Unlock()
-
 	if app.DockerDiscovery.Stop != nil {
 		close(app.DockerDiscovery.Stop)
 		app.DockerDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
+
 	app.DockerDiscovery.Wg.Wait()
+
 	app.DiscoveryMu.Lock()
 	app.DockerDiscovery.Enabled = false
 	app.DockerDiscovery.ClearApps()
+	app.DiscoveryMu.Unlock()
 }
 
 // DiscoverDockerApps queries the Docker API for containers with dashgate labels

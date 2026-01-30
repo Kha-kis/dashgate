@@ -1,21 +1,36 @@
 package discovery
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"time"
 
 	"dashgate/internal/models"
 	"dashgate/internal/server"
+	"dashgate/internal/urlvalidation"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
+
+// Package-level compiled regexes (compiled once, safe for concurrent use).
+var (
+	includeRe    = regexp.MustCompile(`(?m)^\s*include\s+([^;]+);`)
+	serverNameRe = regexp.MustCompile(`server_name\s+([^;]+);`)
+	proxyPassRe  = regexp.MustCompile(`proxy_pass\s+([^;]+);`)
+	listenRe     = regexp.MustCompile(`listen\s+(\d+)(\s+ssl)?`)
+	locationRe   = regexp.MustCompile(`location\s+(?:[=~^]*\s*)?(/[^\s{]*)\s*\{`)
+	commentRe    = regexp.MustCompile(`(?m)#.*$`)
+	titleCaser   = cases.Title(language.English)
+)
+
+// maxIncludeFileSize is the maximum size of a file that can be included (1 MB).
+const maxIncludeFileSize = 1 << 20
 
 // InitNginxDiscovery checks environment variables and system config,
 // then starts the Nginx discovery loop if enabled.
@@ -58,7 +73,7 @@ func StartNginxDiscoveryLoop(app *server.App) {
 		defer app.NginxDiscovery.Wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("Nginx discovery goroutine panicked: %v", r)
+				log.Printf("Nginx discovery goroutine panicked: %v\n%s", r, debug.Stack())
 			}
 		}()
 		ticker := time.NewTicker(60 * time.Second)
@@ -79,17 +94,164 @@ func StartNginxDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopNginxDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	defer app.DiscoveryMu.Unlock()
-
 	if app.NginxDiscovery.Stop != nil {
 		close(app.NginxDiscovery.Stop)
 		app.NginxDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
+
 	app.NginxDiscovery.Wg.Wait()
+
 	app.DiscoveryMu.Lock()
 	app.NginxDiscovery.Enabled = false
 	app.NginxDiscovery.ClearApps()
+	app.DiscoveryMu.Unlock()
+}
+
+// skipExtensions contains file extensions to ignore when scanning config directories.
+var skipExtensions = map[string]bool{
+	".bak":      true,
+	".dpkg-old": true,
+	".dpkg-new": true,
+	".dpkg-dist": true,
+	".swp":      true,
+	".swo":      true,
+	".tmp":      true,
+	".orig":     true,
+}
+
+// skipLocationPaths contains location paths that are not real apps.
+var skipLocationPaths = map[string]bool{
+	"/":              true,
+	"/.well-known":   true,
+	"/api":           true,
+	"/static":        true,
+	"/assets":        true,
+	"/favicon.ico":   true,
+	"/robots.txt":    true,
+	"/health":        true,
+	"/healthz":       true,
+	"/metrics":       true,
+	"/stub_status":   true,
+	"/nginx_status":  true,
+	"/server-status": true,
+}
+
+// resolveIncludes reads file content and inlines any include directives,
+// replacing them with the contents of the included files. Depth-limited
+// to prevent infinite recursion.
+func resolveIncludes(content string, depth int) string {
+	if depth > 3 {
+		return content
+	}
+
+	return includeRe.ReplaceAllStringFunc(content, func(match string) string {
+		sub := includeRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		includePath := strings.TrimSpace(sub[1])
+
+		// Validate the path is safe
+		if err := urlvalidation.ValidateNginxConfigPath(includePath); err != nil {
+			return "# include skipped (validation failed)"
+		}
+
+		// Expand glob patterns
+		matches, err := filepath.Glob(includePath)
+		if err != nil || len(matches) == 0 {
+			return "# include not found"
+		}
+
+		var result strings.Builder
+		for _, m := range matches {
+			// Resolve symlinks
+			resolved, err := filepath.EvalSymlinks(m)
+			if err != nil {
+				log.Printf("Nginx include: cannot resolve symlinks for %s, skipping", m)
+				continue
+			}
+
+			// Re-validate resolved path
+			if err := urlvalidation.ValidateNginxConfigPath(resolved); err != nil {
+				log.Printf("Nginx include: resolved path %s failed validation, skipping", resolved)
+				continue
+			}
+
+			// Check file size before reading
+			fi, err := os.Stat(resolved)
+			if err != nil {
+				log.Printf("Nginx include: cannot stat %s: %v", resolved, err)
+				continue
+			}
+			if fi.Size() > maxIncludeFileSize {
+				log.Printf("Nginx include: %s exceeds %d byte limit, skipping", resolved, maxIncludeFileSize)
+				continue
+			}
+
+			data, err := os.ReadFile(resolved)
+			if err != nil {
+				log.Printf("Nginx include: cannot read %s: %v", resolved, err)
+				continue
+			}
+
+			// Recursively resolve includes in the included content
+			result.WriteString(resolveIncludes(string(data), depth+1))
+			result.WriteString("\n")
+		}
+		return result.String()
+	})
+}
+
+// extractBlock extracts the content between braces starting from the given
+// position in the string. Comments (# to end-of-line) are ignored during
+// brace counting. Returns the block content and the index after the closing
+// brace, or -1 if no complete block is found.
+func extractBlock(s string) (string, int) {
+	braceCount := 1
+	inComment := false
+	for i, char := range s {
+		if char == '\n' {
+			inComment = false
+			continue
+		}
+		if inComment {
+			continue
+		}
+		if char == '#' {
+			inComment = true
+			continue
+		}
+		if char == '{' {
+			braceCount++
+		} else if char == '}' {
+			braceCount--
+			if braceCount == 0 {
+				return s[:i], i
+			}
+		}
+	}
+	return s, -1
+}
+
+// isNginxConfigFile returns true if the file name looks like an Nginx config file.
+func isNginxConfigFile(name string) bool {
+	// Skip hidden files
+	if strings.HasPrefix(name, ".") {
+		return false
+	}
+	// Check for backup/swap file extensions
+	ext := filepath.Ext(name)
+	if ext != "" && skipExtensions[ext] {
+		return false
+	}
+	// Also check full suffixes for multi-part extensions like .dpkg-old
+	for suffix := range skipExtensions {
+		if strings.HasSuffix(name, suffix) {
+			return false
+		}
+	}
+	return true
 }
 
 // DiscoverNginxApps parses Nginx configuration files in the configured directory
@@ -121,59 +283,31 @@ func DiscoverNginxApps(app *server.App) {
 		return
 	}
 
-	// Regex patterns for parsing nginx config
-	serverNameRe := regexp.MustCompile(`server_name\s+([^;]+);`)
-	proxyPassRe := regexp.MustCompile(`proxy_pass\s+([^;]+);`)
-	listenRe := regexp.MustCompile(`listen\s+(\d+)(\s+ssl)?`)
-	includeRe := regexp.MustCompile(`include\s+([^;]+);`)
-
 	var apps []models.App
-	seenHosts := make(map[string]bool)
+	seenURLs := make(map[string]bool)
 
-	// Process config files
+	// Process a config file: read content, resolve includes, parse server and location blocks
 	processConfigFile := func(filePath string) {
-		file, err := os.Open(filePath)
+		data, err := os.ReadFile(filePath)
 		if err != nil {
-			log.Printf("Error opening nginx config file %s: %v", filePath, err)
+			log.Printf("Error reading nginx config file %s: %v", filePath, err)
 			return
 		}
-		defer file.Close()
 
-		var content strings.Builder
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			content.WriteString(scanner.Text())
-			content.WriteString("\n")
-		}
+		// Inline all include directives
+		configContent := resolveIncludes(string(data), 0)
 
-		configContent := content.String()
+		// Strip comments to prevent false matches on braces or keywords in comments
+		configContent = commentRe.ReplaceAllString(configContent, "")
 
-		// Find server blocks (simplified parsing)
-		// Split by "server {" and process each block
+		// Find server blocks
 		blocks := strings.Split(configContent, "server {")
 		for i, block := range blocks {
 			if i == 0 {
 				continue // Skip content before first server block
 			}
 
-			// Find the end of this server block (count braces)
-			braceCount := 1
-			endIdx := 0
-			for j, char := range block {
-				if char == '{' {
-					braceCount++
-				} else if char == '}' {
-					braceCount--
-					if braceCount == 0 {
-						endIdx = j
-						break
-					}
-				}
-			}
-			if endIdx == 0 {
-				endIdx = len(block)
-			}
-			serverBlock := block[:endIdx]
+			serverBlock, _ := extractBlock(block)
 
 			// Extract server_name
 			serverNameMatch := serverNameRe.FindStringSubmatch(serverBlock)
@@ -200,13 +334,6 @@ func DiscoverNginxApps(app *server.App) {
 				continue
 			}
 
-			// Skip if no proxy_pass (static file server)
-			proxyPassMatch := proxyPassRe.FindStringSubmatch(serverBlock)
-			if proxyPassMatch == nil {
-				continue
-			}
-			upstream := strings.TrimSpace(proxyPassMatch[1])
-
 			// Determine protocol based on listen directive
 			protocol := "http"
 			listenMatches := listenRe.FindAllStringSubmatch(serverBlock, -1)
@@ -219,31 +346,96 @@ func DiscoverNginxApps(app *server.App) {
 				}
 			}
 
-			// Skip duplicates
-			if seenHosts[validHost] {
-				continue
-			}
-			seenHosts[validHost] = true
+			// Parse location blocks within this server block
+			locationMatches := locationRe.FindAllStringSubmatchIndex(serverBlock, -1)
+			foundLocationApps := false
 
-			// Create app name from hostname
-			name := validHost
-			parts := strings.Split(validHost, ".")
-			if len(parts) > 0 {
-				name = cases.Title(language.English).String(strings.ReplaceAll(parts[0], "-", " "))
+			for _, locMatch := range locationMatches {
+				// Extract the location path
+				locPath := serverBlock[locMatch[2]:locMatch[3]]
+
+				// Skip non-app paths
+				cleanPath := strings.TrimRight(locPath, "/")
+				if cleanPath == "" {
+					cleanPath = "/"
+				}
+				if skipLocationPaths[cleanPath] {
+					continue
+				}
+
+				// Extract the block content after the opening brace
+				afterBrace := serverBlock[locMatch[1]:]
+				locBlock, _ := extractBlock(afterBrace)
+
+				// Check for proxy_pass within this location block
+				locProxyMatch := proxyPassRe.FindStringSubmatch(locBlock)
+				if locProxyMatch == nil {
+					continue
+				}
+				upstream := strings.TrimSpace(locProxyMatch[1])
+
+				// Build the full app URL
+				appURL := fmt.Sprintf("%s://%s%s", protocol, validHost, locPath)
+
+				// Skip duplicates
+				if seenURLs[appURL] {
+					continue
+				}
+				seenURLs[appURL] = true
+
+				// Derive app name from the location path
+				pathName := strings.TrimLeft(locPath, "/")
+				pathName = strings.TrimRight(pathName, "/")
+				// Take only the first path segment for the name
+				if idx := strings.Index(pathName, "/"); idx > 0 {
+					pathName = pathName[:idx]
+				}
+				appName := titleCaser.String(strings.ReplaceAll(pathName, "-", " "))
+				if appName == "" {
+					continue
+				}
+
+				apps = append(apps, models.App{
+					Name:        appName,
+					URL:         appURL,
+					Description: fmt.Sprintf("Discovered via Nginx (proxied to %s)", upstream),
+					Status:      "online",
+				})
+				foundLocationApps = true
 			}
 
-			a := models.App{
-				Name:        name,
-				URL:         fmt.Sprintf("%s://%s", protocol, validHost),
-				Description: fmt.Sprintf("Discovered via Nginx (proxied to %s)", upstream),
-				Status:      "online",
-			}
+			// Fallback: if no location blocks found, use server-level proxy_pass
+			if !foundLocationApps {
+				proxyPassMatch := proxyPassRe.FindStringSubmatch(serverBlock)
+				if proxyPassMatch == nil {
+					continue
+				}
+				upstream := strings.TrimSpace(proxyPassMatch[1])
 
-			apps = append(apps, a)
+				appURL := fmt.Sprintf("%s://%s", protocol, validHost)
+				if seenURLs[appURL] {
+					continue
+				}
+				seenURLs[appURL] = true
+
+				// Create app name from hostname
+				name := validHost
+				parts := strings.Split(validHost, ".")
+				if len(parts) > 0 {
+					name = titleCaser.String(strings.ReplaceAll(parts[0], "-", " "))
+				}
+
+				apps = append(apps, models.App{
+					Name:        name,
+					URL:         appURL,
+					Description: fmt.Sprintf("Discovered via Nginx (proxied to %s)", upstream),
+					Status:      "online",
+				})
+			}
 		}
 	}
 
-	// Read all .conf files in the config directory
+	// Read all config files in the directory (not just .conf)
 	entries, err := os.ReadDir(nginxConfigPath)
 	if err != nil {
 		log.Printf("Error reading nginx config directory: %v", err)
@@ -254,64 +446,8 @@ func DiscoverNginxApps(app *server.App) {
 		if entry.IsDir() {
 			continue
 		}
-		if strings.HasSuffix(entry.Name(), ".conf") {
+		if isNginxConfigFile(entry.Name()) {
 			processConfigFile(filepath.Join(nginxConfigPath, entry.Name()))
-		}
-	}
-
-	// Also check for includes (1 level deep)
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if strings.HasSuffix(entry.Name(), ".conf") {
-			filePath := filepath.Join(nginxConfigPath, entry.Name())
-			data, err := os.ReadFile(filePath)
-			if err != nil {
-				continue
-			}
-			includeMatches := includeRe.FindAllStringSubmatch(string(data), -1)
-			for _, match := range includeMatches {
-				includePath := strings.TrimSpace(match[1])
-				// Handle relative paths
-				if !strings.HasPrefix(includePath, "/") {
-					includePath = filepath.Join(nginxConfigPath, includePath)
-				}
-				// Validate include path stays within base config directory
-				absInclude, err := filepath.Abs(includePath)
-				if err != nil {
-					continue
-				}
-				absBase, err := filepath.Abs(nginxConfigPath)
-				if err != nil {
-					continue
-				}
-				if !strings.HasPrefix(absInclude, absBase) {
-					log.Printf("Nginx include path %s escapes base directory, skipping", includePath)
-					continue
-				}
-				// Handle glob patterns
-				matches, err := filepath.Glob(includePath)
-				if err == nil {
-					for _, m := range matches {
-						if !strings.HasSuffix(m, ".conf") {
-							continue
-						}
-						// Resolve symlinks and re-validate each match against the base directory
-						resolvedMatch, err := filepath.EvalSymlinks(m)
-						if err != nil {
-							log.Printf("Nginx include: cannot resolve symlinks for %s, skipping", m)
-							continue
-						}
-						absResolved, err := filepath.Abs(resolvedMatch)
-						if err != nil || !strings.HasPrefix(absResolved, absBase) {
-							log.Printf("Nginx include: resolved path %s escapes base directory, skipping", resolvedMatch)
-							continue
-						}
-						processConfigFile(m)
-					}
-				}
-			}
 		}
 	}
 

@@ -26,7 +26,7 @@ import (
 
 // Version is set at build time via -ldflags "-X main.Version=...".
 // Falls back to "dev" for local development.
-var Version = "1.0.0"
+var Version = "1.0.1"
 
 // neuteredFileSystem wraps http.FileSystem to disable directory listings.
 // Requests for directories without an index.html will return 404.
@@ -47,10 +47,12 @@ func (nfs neuteredFileSystem) Open(path string) (http.File, error) {
 	if s.IsDir() {
 		// Check if index.html exists in this directory
 		index := strings.TrimSuffix(path, "/") + "/index.html"
-		if _, err := nfs.fs.Open(index); err != nil {
+		indexFile, err := nfs.fs.Open(index)
+		if err != nil {
 			f.Close()
 			return nil, os.ErrNotExist
 		}
+		indexFile.Close()
 	}
 	return f, nil
 }
@@ -72,7 +74,7 @@ func main() {
 
 	app.IconsPath = os.Getenv("ICONS_PATH")
 	if app.IconsPath == "" {
-		app.IconsPath = "/app/static/icons"
+		app.IconsPath = "/config/icons"
 	}
 	if err := os.MkdirAll(app.IconsPath, 0755); err != nil {
 		log.Printf("Warning: could not create icons directory %s: %v", app.IconsPath, err)
@@ -158,6 +160,38 @@ func main() {
 	if dir := os.Getenv("STATIC_PATH"); dir != "" {
 		staticDir = dir
 	}
+
+	// Seed bundled icons into persistent icons directory on first run.
+	// This copies default app icons from the container image to the persistent
+	// volume so they survive rebuilds alongside user-uploaded icons.
+	if _, err := os.Stat(app.IconsPath); err == nil {
+		bundledIconsDir := filepath.Join(staticDir, "icons")
+		if entries, err := os.ReadDir(bundledIconsDir); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+					continue
+				}
+				dst := filepath.Join(app.IconsPath, entry.Name())
+				if _, err := os.Stat(dst); err == nil {
+					continue // already exists, don't overwrite user customizations
+				}
+				src := filepath.Join(bundledIconsDir, entry.Name())
+				data, err := os.ReadFile(src)
+				if err != nil {
+					log.Printf("Warning: could not read bundled icon %s: %v", entry.Name(), err)
+					continue
+				}
+				if err := os.WriteFile(dst, data, 0644); err != nil {
+					log.Printf("Warning: could not seed icon %s: %v", entry.Name(), err)
+				}
+			}
+		}
+	} else {
+		log.Printf("Warning: icons directory %s does not exist, skipping icon seeding", app.IconsPath)
+	}
+
+	// Serve icons from persistent ICONS_PATH (longest prefix match wins over /static/)
+	mux.Handle("/static/icons/", http.StripPrefix("/static/icons/", http.FileServer(neuteredFileSystem{http.Dir(app.IconsPath)})))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(neuteredFileSystem{http.Dir(staticDir)})))
 
 	// Auth API routes

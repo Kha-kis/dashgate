@@ -105,7 +105,7 @@ $env:STATIC_PATH = ".\static"
 | `PORT` | `1738` | HTTP server port |
 | `CONFIG_PATH` | `/config/config.yaml` | Path to YAML app configuration |
 | `DB_PATH` | `/config/dashgate.db` | SQLite database path |
-| `ICONS_PATH` | `/app/static/icons` | Custom icons directory |
+| `ICONS_PATH` | `/config/icons` | Persistent icons directory (bundled icons seeded on first run) |
 | `DEV_MODE` | `false` | Enable live template reloading |
 | `TEMPLATES_PATH` | `/app/templates` | Templates directory (used in dev mode) |
 | `ENCRYPTION_KEY` | (auto-generated) | 64 hex character AES-256 key for encrypting secrets at rest |
@@ -369,7 +369,7 @@ npm run test:ui
 ### Build with Version
 
 ```bash
-CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=1.0.0" -o dashgate .
+CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=1.0.1" -o dashgate .
 ```
 
 ## License

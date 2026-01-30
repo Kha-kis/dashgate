@@ -20,14 +20,14 @@ COPY internal/ ./internal/
 # Build with CGO enabled for sqlite3
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w -X main.Version=${VERSION}" -o dashgate .
+    CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w -X main.Version=${VERSION#v}" -o dashgate .
 
 # Runtime stage
 FROM alpine:3.21
 
 RUN apk --no-cache add ca-certificates && \
     adduser -D -u 1000 dashgate && \
-    mkdir -p /config && chown dashgate:dashgate /config
+    mkdir -p /config/icons && chown -R dashgate:dashgate /config
 
 WORKDIR /app
 

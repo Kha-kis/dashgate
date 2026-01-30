@@ -35,6 +35,7 @@ cookies.txt
 # Temp
 test-discovery/
 test-auth/
+forum-post.txt
 
 # E2E tests
 e2e/node_modules/

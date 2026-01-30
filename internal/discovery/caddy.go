@@ -91,17 +91,18 @@ func StartCaddyDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopCaddyDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	defer app.DiscoveryMu.Unlock()
-
 	if app.CaddyDiscovery.Stop != nil {
 		close(app.CaddyDiscovery.Stop)
 		app.CaddyDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
+
 	app.CaddyDiscovery.Wg.Wait()
+
 	app.DiscoveryMu.Lock()
 	app.CaddyDiscovery.Enabled = false
 	app.CaddyDiscovery.ClearApps()
+	app.DiscoveryMu.Unlock()
 }
 
 // DiscoverCaddyApps queries the Caddy admin API for server configurations

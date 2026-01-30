@@ -28,13 +28,13 @@ func ManifestHandler(app *server.App) http.HandlerFunc {
 			"theme_color":      "#000000",
 			"icons": []map[string]interface{}{
 				{
-					"src":     "/static/icons/dashgate-192.png",
+					"src":     "/static/branding/dashgate-192.png",
 					"sizes":   "192x192",
 					"type":    "image/png",
 					"purpose": "any maskable",
 				},
 				{
-					"src":     "/static/icons/dashgate-512.png",
+					"src":     "/static/branding/dashgate-512.png",
 					"sizes":   "512x512",
 					"type":    "image/png",
 					"purpose": "any maskable",
@@ -45,7 +45,7 @@ func ManifestHandler(app *server.App) http.HandlerFunc {
 				{
 					"name":  "Search",
 					"url":   "/?search=1",
-					"icons": []map[string]interface{}{{"src": "/static/icons/dashgate-192.png", "sizes": "192x192"}},
+					"icons": []map[string]interface{}{{"src": "/static/branding/dashgate-192.png", "sizes": "192x192"}},
 				},
 			},
 		}

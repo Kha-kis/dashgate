@@ -92,17 +92,18 @@ func StartTraefikDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopTraefikDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	defer app.DiscoveryMu.Unlock()
-
 	if app.TraefikDiscovery.Stop != nil {
 		close(app.TraefikDiscovery.Stop)
 		app.TraefikDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
+
 	app.TraefikDiscovery.Wg.Wait()
+
 	app.DiscoveryMu.Lock()
 	app.TraefikDiscovery.Enabled = false
 	app.TraefikDiscovery.ClearApps()
+	app.DiscoveryMu.Unlock()
 }
 
 // DiscoverTraefikApps queries the Traefik API for HTTP routers and updates

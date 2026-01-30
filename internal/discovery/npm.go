@@ -95,14 +95,14 @@ func StartNPMDiscoveryLoop(app *server.App) {
 // clears all discovered apps, and resets the NPM token.
 func StopNPMDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	defer app.DiscoveryMu.Unlock()
-
 	if app.NPMDiscovery.Stop != nil {
 		close(app.NPMDiscovery.Stop)
 		app.NPMDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
+
 	app.NPMDiscovery.Wg.Wait()
+
 	app.DiscoveryMu.Lock()
 	app.NPMDiscovery.Enabled = false
 	app.NPMDiscovery.ClearApps()
@@ -111,6 +111,7 @@ func StopNPMDiscoveryLoop(app *server.App) {
 	app.NPMToken = ""
 	app.NPMTokenExpiry = time.Time{}
 	app.NPMTokenMu.Unlock()
+	app.DiscoveryMu.Unlock()
 }
 
 // NPMRefreshToken authenticates with the NPM API and stores a new token.

@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-01-30
+
+### Added
+- **Nginx location block discovery** — apps defined as `location /app { proxy_pass ...; }` within server blocks are now discovered, not just standalone server blocks
+- **Nginx include inlining** — `include` directives (including glob patterns like `/etc/nginx/apps/*.conf`) are resolved and parsed recursively (depth-limited to 3)
+- **Extensionless config file support** — Nginx `sites-enabled/` files without `.conf` extension are now processed
+- **Icon persistence** — uploaded icons now stored in `/config/icons/` (persistent volume) instead of inside the container; bundled icons seeded on first run
+
+### Changed
+- Branding files (favicon, PWA icons) moved from `static/icons/` to `static/branding/` — no longer appear in admin icon picker
+- `ICONS_PATH` default changed from `/app/static/icons` to `/config/icons`
+- Service worker cache version bumped to v5
+- Discovery stop functions use explicit lock management instead of fragile defer pattern (all 5 modules)
+- Nginx config regexes compiled once at package level instead of per-cycle
+- Comment-aware brace counting in Nginx config parser
+- Included config file size capped at 1 MB
+- Panic recovery in discovery goroutines now logs stack traces
+
+### Fixed
+- Health check falls back to GET when HEAD returns non-success (fixes false "offline" for apps like File Browser that don't handle HEAD)
+- File descriptor leak in `neuteredFileSystem` directory index check
+- Double-unlock risk in all discovery Stop functions (nginx, docker, traefik, caddy, npm)
+- Nginx comments containing braces no longer corrupt block extraction
+- Include error messages no longer leak filesystem paths
+- Docker build now strips `v` prefix from version tag
+
+### Security
+- Symlinks skipped during icon seeding to prevent sensitive file exposure
+
 ## [1.0.0] - 2025-01-30
 
 Initial public release.
