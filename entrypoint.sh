@@ -28,5 +28,18 @@ fi
 mkdir -p /config/icons
 chown -R "$PUID:$PGID" /config
 
+# Add dashgate user to docker socket group if socket exists
+DOCKER_SOCK="/var/run/docker.sock"
+if [ -S "$DOCKER_SOCK" ]; then
+    SOCK_GID=$(stat -c '%g' "$DOCKER_SOCK")
+    SOCK_GROUP=$(getent group "$SOCK_GID" | cut -d: -f1)
+    if [ -z "$SOCK_GROUP" ]; then
+        # Create a group for the socket GID
+        addgroup -g "$SOCK_GID" dockersock 2>/dev/null || true
+        SOCK_GROUP="dockersock"
+    fi
+    addgroup dashgate "$SOCK_GROUP" 2>/dev/null || true
+fi
+
 # Drop privileges and exec the main process
 exec su-exec dashgate "$@"

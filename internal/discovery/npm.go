@@ -19,6 +19,24 @@ import (
 	"golang.org/x/text/language"
 )
 
+// flexBool handles JSON fields that may be bool or number (0/1).
+// NPM API returns ssl_forced as a number in some versions.
+type flexBool bool
+
+func (fb *flexBool) UnmarshalJSON(data []byte) error {
+	var b bool
+	if err := json.Unmarshal(data, &b); err == nil {
+		*fb = flexBool(b)
+		return nil
+	}
+	var n int
+	if err := json.Unmarshal(data, &n); err == nil {
+		*fb = flexBool(n != 0)
+		return nil
+	}
+	return fmt.Errorf("flexBool: cannot unmarshal %s", string(data))
+}
+
 // InitNPMDiscovery checks environment variables and system config,
 // then starts the NPM (Nginx Proxy Manager) discovery loop if enabled.
 func InitNPMDiscovery(app *server.App) {
@@ -296,8 +314,8 @@ func DiscoverNPMApps(app *server.App) {
 		ForwardHost   string   `json:"forward_host"`
 		ForwardPort   int      `json:"forward_port"`
 		ForwardScheme string   `json:"forward_scheme"`
-		SSLForced     bool     `json:"ssl_forced"`
-		Enabled       bool     `json:"enabled"`
+		SSLForced     flexBool `json:"ssl_forced"`
+		Enabled       flexBool `json:"enabled"`
 		Meta          struct {
 			NginxOnline bool    `json:"nginx_online"`
 			NginxErr    *string `json:"nginx_err"`
@@ -319,7 +337,7 @@ func DiscoverNPMApps(app *server.App) {
 
 		// Determine protocol
 		protocol := "http"
-		if host.SSLForced {
+		if bool(host.SSLForced) {
 			protocol = "https"
 		}
 
@@ -332,7 +350,7 @@ func DiscoverNPMApps(app *server.App) {
 
 		// Determine status
 		status := "offline"
-		if host.Enabled && host.Meta.NginxOnline {
+		if bool(host.Enabled) && host.Meta.NginxOnline {
 			status = "online"
 		}
 
