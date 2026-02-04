@@ -126,7 +126,9 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 		// Save system config
 		app.SysConfigMu.Lock()
 		app.SystemConfig.SetupCompleted = true
-		app.SystemConfig.CookieSecure = true
+		// Auto-detect HTTPS: check TLS or X-Forwarded-Proto from reverse proxy
+		isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+		app.SystemConfig.CookieSecure = isHTTPS
 		if req.SessionDays > 0 {
 			app.SystemConfig.SessionDays = req.SessionDays
 		} else {

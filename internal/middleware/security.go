@@ -114,7 +114,7 @@ func CSRFProtection(next http.Handler) http.Handler {
 				Value:    token,
 				Path:     "/",
 				HttpOnly: false, // JS must be able to read this
-				Secure:   r.TLS != nil,
+				Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 				SameSite: http.SameSiteLaxMode,
 			})
 		}
