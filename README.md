@@ -216,6 +216,27 @@ labels:
 
 Requires mounting the Docker socket: `-v /var/run/docker.sock:/var/run/docker.sock:ro`
 
+**Using a Docker Socket Proxy (recommended for security):**
+
+Instead of mounting the Docker socket directly, you can use a socket proxy like [docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy) to limit API access:
+
+```yaml
+services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy
+    environment:
+      - CONTAINERS=1  # Only allow container listing
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  dashgate:
+    image: khak1s/dashgate:latest
+    environment:
+      - DOCKER_DISCOVERY=true
+      - DOCKER_SOCKET=tcp://socket-proxy:2375
+    # No socket mount needed
+```
+
 ### Traefik
 
 Enable with `TRAEFIK_DISCOVERY=true` and `TRAEFIK_URL=http://traefik:8080`. Discovers HTTP routers from the Traefik API.
