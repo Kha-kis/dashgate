@@ -114,6 +114,7 @@ $env:STATIC_PATH = ".\static"
 | `TEMPLATES_PATH` | `/app/templates` | Templates directory (used in dev mode) |
 | `ENCRYPTION_KEY` | (auto-generated) | 64 hex character AES-256 key for encrypting secrets at rest |
 | `LOGIN_RATE_LIMIT` | `5` | Max login attempts per IP per window |
+| `COOKIE_SECURE` | (auto) | Set to `false` to allow cookies over HTTP (useful behind reverse proxies) |
 
 ### App Catalog (`config.yaml`)
 
