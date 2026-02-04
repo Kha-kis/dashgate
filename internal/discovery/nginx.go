@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"time"
 
@@ -120,13 +121,16 @@ var skipExtensions = map[string]bool{
 	".orig":     true,
 }
 
-// skipLocationPaths contains location paths that are not real apps.
+// skipLocationPaths contains exact location paths that are not real apps.
 var skipLocationPaths = map[string]bool{
 	"/":              true,
 	"/.well-known":   true,
 	"/api":           true,
 	"/static":        true,
 	"/assets":        true,
+	"/public":        true,
+	"/media":         true,
+	"/uploads":       true,
 	"/favicon.ico":   true,
 	"/robots.txt":    true,
 	"/health":        true,
@@ -135,6 +139,139 @@ var skipLocationPaths = map[string]bool{
 	"/stub_status":   true,
 	"/nginx_status":  true,
 	"/server-status": true,
+}
+
+// skipLocationPatterns contains substrings that indicate non-app paths.
+// These match anywhere in the path (case-insensitive).
+var skipLocationPatterns = []string{
+	// Auth/security middleware (these are internal, not user-facing apps)
+	"/authelia/",
+	"/authentik/",
+	"/api/authz",  // More specific to avoid matching /authz-app/
+	"/.oauth/",
+	"/oauth2/",
+	// WebSocket/realtime endpoints (features of other apps)
+	"/socket.io/",
+	"/sockjs/",
+	"/websocket/",
+	// Common sub-features (not standalone apps)
+	"/api/",       // API namespaces
+	"/control/",   // Admin control panels
+	"/download/",  // Download endpoints
+	"/downloads/",
+}
+
+// skipLocationSuffixes contains path suffixes to skip.
+// These only match at the end of the path.
+var skipLocationSuffixes = []string{
+	// API and data endpoints
+	"/api",
+	"/ws",
+	"/wss",
+	// Feed endpoints (XML content, not apps)
+	"/feed",
+	"/rss",
+	"/atom",
+	// Auth endpoints (almost never standalone apps)
+	"/auth",
+	"/login",
+	"/logout",
+	"/callback",
+	"/signin",
+	"/signout",
+	// Protocol endpoints (features of parent apps like audiobookshelf)
+	"/opds",
+	"/kobo",
+}
+
+// hasRegexMetachars returns true if the path contains nginx regex location chars.
+func hasRegexMetachars(path string) bool {
+	return strings.ContainsAny(path, "()[]{}*+?^$|\\")
+}
+
+// shouldSkipLocation returns true if the location path should be filtered out.
+func shouldSkipLocation(locPath string) bool {
+	// Skip regex locations
+	if hasRegexMetachars(locPath) {
+		return true
+	}
+
+	cleanPath := strings.TrimRight(locPath, "/")
+	if cleanPath == "" {
+		cleanPath = "/"
+	}
+
+	// Skip exact matches
+	if skipLocationPaths[cleanPath] {
+		return true
+	}
+
+	// Skip pattern matches (case-insensitive)
+	lowerPath := strings.ToLower(locPath)
+	for _, pattern := range skipLocationPatterns {
+		if strings.Contains(lowerPath, pattern) {
+			return true
+		}
+	}
+
+	// Skip suffix matches
+	for _, suffix := range skipLocationSuffixes {
+		if strings.HasSuffix(cleanPath, suffix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// dedupeAppsByBasePath removes sub-path duplicates, keeping only the shortest path per host.
+// For example, if we have /lidarr and /lidarr/api, only /lidarr is kept.
+func dedupeAppsByBasePath(apps []models.App) []models.App {
+	if len(apps) == 0 {
+		return apps
+	}
+
+	// Group apps by host
+	byHost := make(map[string][]models.App)
+	for _, app := range apps {
+		// Extract host from URL
+		host := app.URL
+		if idx := strings.Index(app.URL, "://"); idx != -1 {
+			host = app.URL[idx+3:]
+		}
+		if idx := strings.Index(host, "/"); idx != -1 {
+			host = host[:idx]
+		}
+		byHost[host] = append(byHost[host], app)
+	}
+
+	var result []models.App
+	for _, hostApps := range byHost {
+		// Sort by URL length (shortest first) for consistent ordering
+		sort.Slice(hostApps, func(i, j int) bool {
+			return len(hostApps[i].URL) < len(hostApps[j].URL)
+		})
+
+		// Keep only apps that aren't sub-paths of earlier (shorter) apps
+		var kept []string
+		for _, app := range hostApps {
+			normalizedURL := strings.TrimRight(app.URL, "/")
+			isSubPath := false
+			for _, keptURL := range kept {
+				// Check if this app's URL starts with a kept URL (plus /)
+				if strings.HasPrefix(normalizedURL, keptURL+"/") {
+					isSubPath = true
+					break
+				}
+			}
+			if !isSubPath {
+				kept = append(kept, normalizedURL)
+				result = append(result, app)
+			}
+		}
+	}
+
+	return result
 }
 
 // resolveIncludes reads file content and inlines any include directives,
@@ -354,12 +491,8 @@ func DiscoverNginxApps(app *server.App) {
 				// Extract the location path
 				locPath := serverBlock[locMatch[2]:locMatch[3]]
 
-				// Skip non-app paths
-				cleanPath := strings.TrimRight(locPath, "/")
-				if cleanPath == "" {
-					cleanPath = "/"
-				}
-				if skipLocationPaths[cleanPath] {
+				// Use unified skip check
+				if shouldSkipLocation(locPath) {
 					continue
 				}
 
@@ -450,6 +583,9 @@ func DiscoverNginxApps(app *server.App) {
 			processConfigFile(filepath.Join(nginxConfigPath, entry.Name()))
 		}
 	}
+
+	// Deduplicate: remove sub-paths (e.g., keep /lidarr, remove /lidarr/api)
+	apps = dedupeAppsByBasePath(apps)
 
 	app.NginxDiscovery.SetApps(apps)
 
