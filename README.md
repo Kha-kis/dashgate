@@ -36,8 +36,10 @@ docker run -d \
   --name dashgate \
   -p 1738:1738 \
   -v ./config:/config \
+  -e PUID=1000 \
+  -e PGID=1000 \
   --restart unless-stopped \
-  dashgate:latest
+  khak1s/dashgate:latest
 ```
 
 Or with Docker Compose:
@@ -45,7 +47,7 @@ Or with Docker Compose:
 ```yaml
 services:
   dashgate:
-    build: .
+    image: khak1s/dashgate:latest
     container_name: dashgate
     restart: unless-stopped
     ports:
@@ -55,8 +57,8 @@ services:
       # Uncomment for Docker auto-discovery:
       # - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - CONFIG_PATH=/config/config.yaml
-      - DB_PATH=/config/dashgate.db
+      - PUID=1000  # Match your host user ID (run `id` to find it)
+      - PGID=1000  # Match your host group ID
       - PORT=1738
 ```
 
@@ -102,6 +104,8 @@ $env:STATIC_PATH = ".\static"
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `PUID` | `1000` | User ID for file permissions (NAS/Unraid compatibility) |
+| `PGID` | `1000` | Group ID for file permissions (NAS/Unraid compatibility) |
 | `PORT` | `1738` | HTTP server port |
 | `CONFIG_PATH` | `/config/config.yaml` | Path to YAML app configuration |
 | `DB_PATH` | `/config/dashgate.db` | SQLite database path |
