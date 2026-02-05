@@ -219,5 +219,9 @@ func DiscoverDockerApps(app *server.App) {
 
 	app.DockerDiscovery.SetApps(apps)
 
-	log.Printf("Docker discovery found %d apps", len(apps))
+	if len(apps) == 0 && len(containers) > 0 {
+		log.Printf("Docker discovery: found %d containers, 0 with dashgate.enable=true label", len(containers))
+	} else {
+		log.Printf("Docker discovery: found %d apps (from %d containers)", len(apps), len(containers))
+	}
 }
