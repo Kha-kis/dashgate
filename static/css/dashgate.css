@@ -2281,6 +2281,11 @@
             border-top: 1px solid var(--border);
         }
 
+        /* Icon selector needs higher z-index when opened from another modal */
+        #iconSelectorModal {
+            z-index: 3500;
+        }
+
         .admin-form-group {
             margin-bottom: 16px;
         }
