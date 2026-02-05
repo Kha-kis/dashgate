@@ -17,7 +17,9 @@
             deleteCallback: null,
             discoveredApps: [],
             staleOverrides: [],
-            discoveredSourceFilter: 'all'
+            discoveredSourceFilter: 'all',
+            selectedDiscoveredApps: new Set(),
+            filteredDiscoveredApps: []
         };
 
         async function loadAdminData() {

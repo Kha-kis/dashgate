@@ -257,6 +257,7 @@ func main() {
 	// Discovered apps
 	mux.HandleFunc("/api/discovered-apps", handlers.DiscoveredAppsHandler(app))
 	mux.HandleFunc("/api/admin/discovered-apps", auth.RequireAdmin(app, handlers.AdminDiscoveredAppsHandler(app)))
+	mux.HandleFunc("/api/admin/discovered-apps/bulk", auth.RequireAdmin(app, handlers.BulkDiscoveredAppsHandler(app)))
 
 	// Discovery management
 	mux.HandleFunc("/api/admin/docker-discovery", auth.RequireAdmin(app, handlers.DockerDiscoveryHandler(app)))

@@ -3150,3 +3150,113 @@
             color: var(--text-primary);
             word-break: break-all;
         }
+
+        /* Bulk selection styles */
+        .discovered-app-checkbox {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            min-width: 24px;
+            height: 24px;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .discovered-app-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .discovered-app-item.selected {
+            background: var(--accent-bg, rgba(10, 132, 255, 0.1));
+            border-color: var(--accent);
+        }
+
+        .discovered-select-all {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 8px;
+            cursor: pointer;
+        }
+
+        .discovered-select-all input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .discovered-bulk-actions {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            border: 1px solid var(--accent);
+        }
+
+        .discovered-bulk-actions.visible {
+            display: flex;
+        }
+
+        .discovered-bulk-actions #bulkSelectedCount {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--accent);
+            margin-right: 4px;
+        }
+
+        .bulk-action-btn {
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            background: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .bulk-action-btn:hover {
+            opacity: 0.85;
+        }
+
+        .bulk-action-btn.secondary {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+        }
+
+        .bulk-action-btn.secondary:hover {
+            background: var(--bg-secondary);
+        }
+
+        .bulk-selected-list {
+            max-height: 120px;
+            overflow-y: auto;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .bulk-selected-item {
+            padding: 4px 0;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .bulk-selected-item:last-child {
+            border-bottom: none;
+        }
+
+        .bulk-selected-item-name {
+            color: var(--text-primary);
+            font-weight: 500;
+        }

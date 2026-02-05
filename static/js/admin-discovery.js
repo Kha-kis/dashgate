@@ -564,10 +564,14 @@
                 return;
             }
 
+            // Store filtered apps for select-all functionality
+            adminState.filteredDiscoveredApps = apps;
+
             container.innerHTML = apps.map(app => {
                 const override = app.override;
                 const displayName = override?.nameOverride || app.name;
                 const icon = override?.iconOverride || app.icon;
+                const isSelected = adminState.selectedDiscoveredApps?.has(app.url);
 
                 const iconHtml = icon
                     ? `<img src="/static/icons/${escapeHtml(icon)}" alt="" onerror="this.parentElement.innerHTML='<span style=\\'color:var(--text-tertiary);font-size:14px;\\'>${escapeHtml(displayName.charAt(0).toUpperCase())}</span>'">`
@@ -587,7 +591,10 @@
                     : '';
 
                 return `
-                    <div class="discovered-app-item">
+                    <div class="discovered-app-item${isSelected ? ' selected' : ''}" data-url="${escapeHtml(app.url)}">
+                        <label class="discovered-app-checkbox" onclick="event.stopPropagation()">
+                            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleDiscoveredAppSelection('${encodeURIComponent(app.url)}')">
+                        </label>
                         <div class="discovered-app-icon">${iconHtml}</div>
                         <div class="discovered-app-info">
                             <div class="discovered-app-name">${escapeHtml(displayName)}</div>
@@ -609,6 +616,8 @@
                     </div>
                 `;
             }).join('');
+
+            updateBulkActionBar();
 
             renderStaleOverrides();
         }
@@ -929,6 +938,201 @@
                 showToast('App access updated');
                 closeEditAppModal();
                 await reloadApps();
+            } catch (e) {
+                showToast('Error: ' + e.message);
+            }
+        }
+
+        // Bulk selection functions (exposed globally for onclick handlers)
+        window.toggleDiscoveredAppSelection = function(encodedUrl) {
+            const url = decodeURIComponent(encodedUrl);
+            if (!adminState.selectedDiscoveredApps) {
+                adminState.selectedDiscoveredApps = new Set();
+            }
+
+            if (adminState.selectedDiscoveredApps.has(url)) {
+                adminState.selectedDiscoveredApps.delete(url);
+            } else {
+                adminState.selectedDiscoveredApps.add(url);
+            }
+
+            // Update visual state
+            const item = document.querySelector(`.discovered-app-item[data-url="${CSS.escape(url)}"]`);
+            if (item) {
+                item.classList.toggle('selected', adminState.selectedDiscoveredApps.has(url));
+            }
+
+            updateBulkActionBar();
+            updateSelectAllCheckbox();
+        }
+
+        window.toggleSelectAllDiscovered = function() {
+            const selectAllCb = document.getElementById('selectAllDiscovered');
+            const filtered = adminState.filteredDiscoveredApps || [];
+
+            if (!adminState.selectedDiscoveredApps) {
+                adminState.selectedDiscoveredApps = new Set();
+            }
+
+            const isChecked = selectAllCb.checked;
+            filtered.forEach(app => {
+                if (isChecked) {
+                    adminState.selectedDiscoveredApps.add(app.url);
+                } else {
+                    adminState.selectedDiscoveredApps.delete(app.url);
+                }
+                // Update DOM directly instead of re-rendering
+                const item = document.querySelector(`.discovered-app-item[data-url="${CSS.escape(app.url)}"]`);
+                if (item) {
+                    item.classList.toggle('selected', isChecked);
+                    const checkbox = item.querySelector('input[type="checkbox"]');
+                    if (checkbox) checkbox.checked = isChecked;
+                }
+            });
+
+            updateBulkActionBar();
+        }
+
+        function updateSelectAllCheckbox() {
+            const selectAllCb = document.getElementById('selectAllDiscovered');
+            if (!selectAllCb) return;
+
+            const filtered = adminState.filteredDiscoveredApps || [];
+            const selected = adminState.selectedDiscoveredApps || new Set();
+
+            const allSelected = filtered.length > 0 && filtered.every(app => selected.has(app.url));
+            const someSelected = filtered.some(app => selected.has(app.url));
+
+            selectAllCb.checked = allSelected;
+            selectAllCb.indeterminate = someSelected && !allSelected;
+        }
+
+        function updateBulkActionBar() {
+            const bar = document.getElementById('discoveredBulkActions');
+            const count = adminState.selectedDiscoveredApps?.size || 0;
+
+            if (count > 0) {
+                bar.classList.add('visible');
+                document.getElementById('bulkSelectedCount').textContent = `${count} selected`;
+            } else {
+                bar.classList.remove('visible');
+            }
+        }
+
+        window.clearDiscoveredSelection = function() {
+            if (adminState.selectedDiscoveredApps) {
+                // Update DOM directly for each selected item
+                adminState.selectedDiscoveredApps.forEach(url => {
+                    const item = document.querySelector(`.discovered-app-item[data-url="${CSS.escape(url)}"]`);
+                    if (item) {
+                        item.classList.remove('selected');
+                        const checkbox = item.querySelector('input[type="checkbox"]');
+                        if (checkbox) checkbox.checked = false;
+                    }
+                });
+                adminState.selectedDiscoveredApps.clear();
+            }
+            updateSelectAllCheckbox();
+            updateBulkActionBar();
+        }
+
+        function getSelectedUrls() {
+            return Array.from(adminState.selectedDiscoveredApps || []);
+        }
+
+        window.openBulkConfigureModal = function() {
+            const urls = getSelectedUrls();
+            if (urls.length === 0) return;
+
+            // Show selected apps list
+            const listContainer = document.getElementById('bulkSelectedList');
+            const selectedApps = (adminState.filteredDiscoveredApps || []).filter(app => urls.includes(app.url));
+            listContainer.innerHTML = selectedApps.map(app => {
+                const displayName = app.override?.nameOverride || app.name;
+                return `<div class="bulk-selected-item">
+                    <span class="bulk-selected-item-name">${escapeHtml(displayName)}</span>
+                    <span style="color:var(--text-tertiary);"> - ${escapeHtml(app.url)}</span>
+                </div>`;
+            }).join('');
+
+            // Populate category dropdown
+            const catSelect = document.getElementById('bulkConfigCategory');
+            catSelect.innerHTML = '<option value="">-- Select Category --</option>';
+            adminState.categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat.name;
+                opt.textContent = cat.name;
+                catSelect.appendChild(opt);
+            });
+            const newOpt = document.createElement('option');
+            newOpt.value = '__new__';
+            newOpt.textContent = 'New Category...';
+            catSelect.appendChild(newOpt);
+
+            // Populate groups
+            const groupContainer = document.getElementById('bulkConfigGroups');
+            const allGroups = getAvailableGroups();
+            const adminGroups = getAdminGroupNames();
+
+            if (allGroups.length === 0) {
+                groupContainer.innerHTML = '<div class="admin-empty">No groups available</div>';
+            } else {
+                groupContainer.innerHTML = allGroups.map(g => {
+                    const isAdminGroup = adminGroups.includes(g);
+                    return `
+                    <label class="admin-group-checkbox">
+                        <input type="checkbox" value="${escapeHtml(g)}" ${isAdminGroup ? 'checked disabled' : ''}>
+                        <span class="admin-group-checkbox-label">${escapeHtml(g)}${isAdminGroup ? ' (required)' : ''}</span>
+                    </label>`;
+                }).join('');
+            }
+
+            document.getElementById('bulkConfigureModal').classList.add('open');
+        }
+
+        window.closeBulkConfigureModal = function() {
+            document.getElementById('bulkConfigureModal').classList.remove('open');
+        }
+
+        window.applyBulkConfigure = async function() {
+            const urls = getSelectedUrls();
+            let category = document.getElementById('bulkConfigCategory').value;
+            const checkboxes = document.querySelectorAll('#bulkConfigGroups input[type="checkbox"]:checked');
+            const groups = Array.from(checkboxes).map(cb => cb.value);
+
+            // Include admin groups
+            getAdminGroupNames().forEach(g => {
+                if (!groups.includes(g)) groups.push(g);
+            });
+
+            if (category === '__new__') {
+                const newCat = prompt('Enter new category name:');
+                if (!newCat || !newCat.trim()) return;
+                category = newCat.trim();
+            }
+
+            if (!category) {
+                showToast('Category is required');
+                return;
+            }
+
+            if (groups.length === 0) {
+                showToast('At least one group is required');
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/admin/discovered-apps/bulk', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ urls, action: 'show', category, groups })
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                showToast(`${urls.length} app(s) configured`);
+                closeBulkConfigureModal();
+                clearDiscoveredSelection();
+                await loadDiscoveredAppsData();
             } catch (e) {
                 showToast('Error: ' + e.message);
             }
