@@ -1,5 +1,5 @@
 // Service Worker for DashGate PWA
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const STATIC_CACHE = `dashgate-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dashgate-dynamic-${CACHE_VERSION}`;
 const OFFLINE_URL = '/offline.html';
