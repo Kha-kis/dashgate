@@ -26,7 +26,7 @@ import (
 
 // Version is set at build time via -ldflags "-X main.Version=...".
 // Falls back to "dev" for local development.
-var Version = "1.0.5"
+var Version = "1.0.6"
 
 // neuteredFileSystem wraps http.FileSystem to disable directory listings.
 // Requests for directories without an index.html will return 404.
