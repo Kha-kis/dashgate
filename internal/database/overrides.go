@@ -84,6 +84,62 @@ func SaveDiscoveredOverride(app *server.App, o *models.DiscoveredAppOverride) er
 	return nil
 }
 
+// SaveDiscoveredOverridesBatch saves multiple overrides in a single transaction.
+func SaveDiscoveredOverridesBatch(app *server.App, overrides []*models.DiscoveredAppOverride) error {
+	tx, err := app.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`INSERT INTO discovered_app_overrides (url, source, name_override, url_override, icon_override, description_override, category, groups, hidden, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(url) DO UPDATE SET
+			source=excluded.source,
+			name_override=excluded.name_override,
+			url_override=excluded.url_override,
+			icon_override=excluded.icon_override,
+			description_override=excluded.description_override,
+			category=excluded.category,
+			groups=excluded.groups,
+			hidden=excluded.hidden,
+			updated_at=CURRENT_TIMESTAMP`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, o := range overrides {
+		groupsJSON, err := json.Marshal(o.Groups)
+		if err != nil {
+			return fmt.Errorf("failed to marshal groups: %w", err)
+		}
+
+		hiddenInt := 0
+		if o.Hidden {
+			hiddenInt = 1
+		}
+
+		_, err = stmt.Exec(o.URL, o.Source, o.NameOverride, o.URLOverride, o.IconOverride, o.DescriptionOverride, o.Category, string(groupsJSON), hiddenInt)
+		if err != nil {
+			return fmt.Errorf("failed to save override for %s: %w", o.URL, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Update cache
+	app.DiscoveredOverridesMu.Lock()
+	for _, o := range overrides {
+		app.DiscoveredOverrides[o.URL] = o
+	}
+	app.DiscoveredOverridesMu.Unlock()
+
+	return nil
+}
+
 // DeleteDiscoveredOverride removes a discovered app override by URL from both
 // the database and the in-memory cache.
 func DeleteDiscoveredOverride(app *server.App, url string) error {

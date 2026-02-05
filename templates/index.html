@@ -1678,12 +1678,20 @@ environment:
                             <input type="text" id="discoveredSearchInput" placeholder="Search discovered apps..." class="admin-search-input" oninput="filterDiscoveredApps()">
                         </div>
                         <div class="discovered-source-filters" id="discoveredSourceFilters">
+                            <label class="discovered-select-all">
+                                <input type="checkbox" id="selectAllDiscovered" onchange="toggleSelectAllDiscovered()">
+                            </label>
                             <button class="discovered-source-filter active" onclick="filterDiscoveredBySource('all')">All</button>
                             <button class="discovered-source-filter" onclick="filterDiscoveredBySource('docker')">Docker</button>
                             <button class="discovered-source-filter" onclick="filterDiscoveredBySource('traefik')">Traefik</button>
                             <button class="discovered-source-filter" onclick="filterDiscoveredBySource('nginx')">Nginx</button>
                             <button class="discovered-source-filter" onclick="filterDiscoveredBySource('npm')">NPM</button>
                             <button class="discovered-source-filter" onclick="filterDiscoveredBySource('caddy')">Caddy</button>
+                        </div>
+                        <div class="discovered-bulk-actions" id="discoveredBulkActions">
+                            <span id="bulkSelectedCount">0 selected</span>
+                            <button class="bulk-action-btn" onclick="openBulkConfigureModal()">Configure</button>
+                            <button class="bulk-action-btn secondary" onclick="clearDiscoveredSelection()">Clear</button>
                         </div>
                         <div class="discovered-apps-list" id="discoveredAppsList">
                             <div class="admin-loading">Loading discovered apps...</div>
@@ -2031,6 +2039,43 @@ environment:
             <div class="admin-modal-footer">
                 <button class="settings-btn" onclick="closeDiscoveredAppModal()">Cancel</button>
                 <button class="settings-btn admin-btn-primary" onclick="saveDiscoveredAppConfig()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Configure Modal -->
+    <div class="admin-modal" id="bulkConfigureModal" role="dialog" aria-modal="true" aria-label="Bulk Configure">
+        <div class="admin-modal-backdrop" onclick="closeBulkConfigureModal()"></div>
+        <div class="admin-modal-content" style="max-width: 450px;">
+            <div class="admin-modal-header">
+                <h3>Configure Selected Apps</h3>
+                <button class="settings-close" onclick="closeBulkConfigureModal()">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="admin-modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div class="admin-form-group">
+                    <label>Selected Apps</label>
+                    <div class="bulk-selected-list" id="bulkSelectedList"></div>
+                </div>
+                <div class="admin-form-group">
+                    <label for="bulkConfigCategory">Category *</label>
+                    <select id="bulkConfigCategory" class="admin-input"></select>
+                </div>
+                <div class="admin-form-group">
+                    <label>Access Groups *</label>
+                    <p class="settings-desc" style="margin-bottom: 8px;">Select which groups can see these apps</p>
+                    <div class="admin-group-checkboxes" id="bulkConfigGroups" style="max-height: 150px;"></div>
+                </div>
+                <p class="settings-desc" style="margin-top: 12px; font-size: 11px; color: var(--text-tertiary);">
+                    Other settings (name, URL, icon, description) can be configured individually via the edit button on each app.
+                </p>
+            </div>
+            <div class="admin-modal-footer">
+                <button class="settings-btn" onclick="closeBulkConfigureModal()">Cancel</button>
+                <button class="settings-btn admin-btn-primary" onclick="applyBulkConfigure()">Apply</button>
             </div>
         </div>
     </div>
