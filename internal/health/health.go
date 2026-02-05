@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"dashgate/internal/discovery"
 	"dashgate/internal/server"
 )
 
@@ -109,6 +110,16 @@ func RunHealthChecks(app *server.App) {
 		}
 	}
 	app.ConfigMu.RUnlock()
+
+	// Include discovered apps in health checks
+	for _, dApp := range discovery.GetAllRawDiscoveredApps(app) {
+		// Use URLOverride if set, otherwise use discovered URL
+		url := dApp.URL
+		if dApp.Override != nil && dApp.Override.URLOverride != "" {
+			url = dApp.Override.URLOverride
+		}
+		urls[url] = true
+	}
 
 	sem := make(chan struct{}, 20)
 
