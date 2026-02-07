@@ -32,6 +32,7 @@ var sensitiveKeys = map[string]bool{
 	"npm_password":       true,
 	"traefik_password":   true,
 	"caddy_password":     true,
+	"unraid_api_key":     true,
 }
 
 // IsSensitiveKey returns true if the given system_config key holds a secret

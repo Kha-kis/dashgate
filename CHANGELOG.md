@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-02-05
+
+### Added
+- **Unraid discovery** — discover Docker containers from Unraid 7.2+ via GraphQL API with `x-api-key` authentication
+- **Unraid CA template support** — handle `[IP]` and `[PORT:default]` placeholders in WebUI URLs, resolve relative icon paths against Unraid server
+- **Unraid connection testing** — test API connectivity and view container count from admin UI
+
 ## [1.0.6] - 2026-02-05
 
 ### Added
@@ -121,6 +128,7 @@ Initial public release.
 - Nginx configuration file parsing for server blocks
 - Nginx Proxy Manager proxy host discovery via API
 - Caddy reverse proxy route discovery via admin API
+- Unraid Docker container discovery via GraphQL API
 - Per-source enable/disable, manual refresh, and connection testing
 - Override system for customizing discovered app display and access
 

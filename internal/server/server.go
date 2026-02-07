@@ -56,6 +56,7 @@ type App struct {
 	NginxDiscovery   *DiscoveryManager
 	NPMDiscovery     *DiscoveryManager
 	CaddyDiscovery   *DiscoveryManager
+	UnraidDiscovery  *DiscoveryManager
 	DiscoveryMu      sync.RWMutex
 
 	// Discovery env override flags
@@ -64,6 +65,7 @@ type App struct {
 	NginxDiscoveryEnvOverride   bool
 	NPMDiscoveryEnvOverride     bool
 	CaddyDiscoveryEnvOverride   bool
+	UnraidDiscoveryEnvOverride  bool
 
 	// Discovered app overrides cache
 	DiscoveredOverrides   map[string]*models.DiscoveredAppOverride
@@ -154,6 +156,7 @@ func New() *App {
 		NginxDiscovery:    NewDiscoveryManager(),
 		NPMDiscovery:      NewDiscoveryManager(),
 		CaddyDiscovery:    NewDiscoveryManager(),
+		UnraidDiscovery:   NewDiscoveryManager(),
 		HTTPClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},

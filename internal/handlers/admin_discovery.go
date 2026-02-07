@@ -724,3 +724,138 @@ func CaddyTestHandler(app *server.App) http.HandlerFunc {
 		})
 	}
 }
+
+// UnraidDiscoveryHandler manages Unraid Docker discovery settings.
+func UnraidDiscoveryHandler(app *server.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			app.DiscoveryMu.Lock()
+			enabled := app.UnraidDiscovery.Enabled
+			app.DiscoveryMu.Unlock()
+
+			app.SysConfigMu.RLock()
+			unraidURL := app.SystemConfig.UnraidURL
+			hasAPIKey := app.SystemConfig.UnraidAPIKey != ""
+			app.SysConfigMu.RUnlock()
+
+			status := map[string]interface{}{
+				"enabled":     enabled,
+				"url":         unraidURL,
+				"hasApiKey":   hasAPIKey,
+				"appCount":    len(app.UnraidDiscovery.GetApps()),
+				"envOverride": app.UnraidDiscoveryEnvOverride,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(status)
+
+		case http.MethodPost:
+			go discovery.DiscoverUnraidApps(app)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"status": "refresh triggered"})
+
+		case http.MethodPut:
+			if app.UnraidDiscoveryEnvOverride {
+				http.Error(w, "Unraid discovery is controlled by environment variables", http.StatusConflict)
+				return
+			}
+
+			var req struct {
+				Enabled bool   `json:"enabled"`
+				URL     string `json:"url"`
+				APIKey  string `json:"apiKey"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Invalid JSON", http.StatusBadRequest)
+				return
+			}
+
+			if req.URL != "" {
+				if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
+					http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+			}
+
+			app.SysConfigMu.Lock()
+			app.SystemConfig.UnraidDiscoveryEnabled = req.Enabled
+			app.SystemConfig.UnraidURL = req.URL
+			if req.APIKey != "" {
+				app.SystemConfig.UnraidAPIKey = req.APIKey
+			}
+			unraidAPIKey := app.SystemConfig.UnraidAPIKey
+			app.SysConfigMu.Unlock()
+
+			if err := database.SaveSystemConfig(app); err != nil {
+				log.Printf("Failed to save discovery config: %v", err)
+				http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+				return
+			}
+
+			if req.Enabled && req.URL != "" && (req.APIKey != "" || unraidAPIKey != "") {
+				discovery.StartUnraidDiscoveryLoop(app)
+			} else {
+				discovery.StopUnraidDiscoveryLoop(app)
+			}
+
+			app.DiscoveryMu.Lock()
+			enabled := app.UnraidDiscovery.Enabled
+			app.DiscoveryMu.Unlock()
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "updated",
+				"enabled": enabled,
+			})
+
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
+// UnraidTestHandler tests connectivity to an Unraid GraphQL API endpoint.
+func UnraidTestHandler(app *server.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			URL    string `json:"url"`
+			APIKey string `json:"apiKey"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if req.URL == "" || req.APIKey == "" {
+			http.Error(w, "URL and API key are required", http.StatusBadRequest)
+			return
+		}
+
+		if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
+			http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		containerCount, err := discovery.TestUnraidConnection(app.HTTPClient, req.URL, req.APIKey)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":        true,
+			"message":        fmt.Sprintf("Connection successful! Found %d container(s) with WebUI", containerCount),
+			"containerCount": containerCount,
+		})
+	}
+}

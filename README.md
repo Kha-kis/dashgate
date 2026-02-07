@@ -10,7 +10,7 @@ A self-hosted application gateway for managing and accessing your web services. 
 
 - **Multi-method authentication** - Local accounts, LDAP, OIDC/OAuth2, and reverse proxy (Authelia/Authentik) support
 - **Group-based access control** - Show apps only to users in specific groups
-- **Automatic app discovery** - Discover apps from Docker, Traefik, Nginx, Nginx Proxy Manager, and Caddy
+- **Automatic app discovery** - Discover apps from Docker, Traefik, Nginx, Nginx Proxy Manager, Caddy, and Unraid
 - **Health monitoring** - Background health checks with real-time status indicators
 - **First-time setup wizard** - Guided configuration on initial deployment
 - **Admin panel** - Manage users, apps, categories, and discovery sources from the UI
@@ -115,6 +115,9 @@ $env:STATIC_PATH = ".\static"
 | `ENCRYPTION_KEY` | (auto-generated) | 64 hex character AES-256 key for encrypting secrets at rest |
 | `LOGIN_RATE_LIMIT` | `5` | Max login attempts per IP per window |
 | `COOKIE_SECURE` | (auto) | Set to `false` to allow cookies over HTTP (useful behind reverse proxies) |
+| `UNRAID_DISCOVERY` | `false` | Enable Unraid container discovery |
+| `UNRAID_URL` | | Unraid server URL (e.g., `http://tower.local`) |
+| `UNRAID_API_KEY` | | Unraid API key for GraphQL access |
 
 ### App Catalog (`config.yaml`)
 
@@ -253,6 +256,17 @@ Enable with `NPM_DISCOVERY=true`, `NPM_URL`, `NPM_EMAIL`, and `NPM_PASSWORD`. Di
 
 Enable with `CADDY_DISCOVERY=true` and `CADDY_ADMIN_URL=http://localhost:2019`. Discovers reverse proxy routes from the Caddy admin API.
 
+### Unraid
+
+Enable with `UNRAID_DISCOVERY=true`, `UNRAID_URL`, and `UNRAID_API_KEY`. Discovers Docker containers with WebUI URLs configured via the Unraid GraphQL API (requires Unraid 7.2+).
+
+To create an API key on your Unraid server:
+```bash
+unraid-api apikey --name "DashGate" --create --roles ADMIN --json
+```
+
+Or configure via the admin UI under Discovery settings — enter your Unraid server URL and API key, then test the connection.
+
 ### Managing Discovered Apps
 
 Discovered apps are hidden by default. Use the admin panel to:
@@ -317,6 +331,8 @@ All require admin group membership.
 | `GET/POST` | `/api/admin/nginx-discovery` | Nginx discovery config |
 | `GET/POST` | `/api/admin/npm-discovery` | NPM discovery config |
 | `GET/POST` | `/api/admin/caddy-discovery` | Caddy discovery config |
+| `GET/POST/PUT` | `/api/admin/unraid-discovery` | Unraid discovery config |
+| `POST` | `/api/admin/unraid-discovery/test` | Test Unraid connection |
 | `GET` | `/api/admin/backup` | Download backup |
 | `POST` | `/api/admin/restore` | Restore from backup |
 | `GET` | `/api/admin/audit-log` | View audit log |
@@ -359,7 +375,7 @@ dashgate/
     auth/                  # Authentication (OIDC, LDAP, local, proxy, API keys)
     config/                # YAML config loading and app mappings
     database/              # SQLite schema, system config, encryption, audit
-    discovery/             # Auto-discovery (Docker, Traefik, Nginx, NPM, Caddy)
+    discovery/             # Auto-discovery (Docker, Traefik, Nginx, NPM, Caddy, Unraid)
     handlers/              # HTTP request handlers
     health/                # Background health checker
     lldap/                 # LLDAP API client

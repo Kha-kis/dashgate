@@ -131,6 +131,9 @@
                 // Load Caddy discovery status
                 await loadCaddyDiscoveryStatus();
 
+                // Load Unraid discovery status
+                await loadUnraidDiscoveryStatus();
+
                 // Load discovered apps for management
                 await loadDiscoveredAppsData();
             } catch (e) {
@@ -194,6 +197,7 @@
                     loadNginxDiscoveryStatus(),
                     loadNPMDiscoveryStatus(),
                     loadCaddyDiscoveryStatus(),
+                    loadUnraidDiscoveryStatus(),
                     loadDiscoveredAppsData()
                 ]);
             } catch (e) {

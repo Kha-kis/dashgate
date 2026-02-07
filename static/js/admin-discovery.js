@@ -41,6 +41,11 @@
             document.getElementById('caddyConfigSection').style.display = enabled ? 'block' : 'none';
         }
 
+        function toggleUnraidSection() {
+            const enabled = document.getElementById('unraidDiscoveryEnabled').checked;
+            document.getElementById('unraidConfigSection').style.display = enabled ? 'block' : 'none';
+        }
+
         // Docker Discovery
         async function loadDockerDiscoveryStatus() {
             try {
@@ -417,6 +422,93 @@
             }
         }
 
+        // Unraid Discovery
+        async function loadUnraidDiscoveryStatus() {
+            try {
+                const resp = await fetch('/api/admin/unraid-discovery', { credentials: 'include' });
+                if (resp.ok) {
+                    const status = await resp.json();
+                    const hint = document.getElementById('unraidStatusHint');
+                    const refreshBtn = document.getElementById('unraidRefreshBtn');
+                    const enabledChk = document.getElementById('unraidDiscoveryEnabled');
+                    const urlInput = document.getElementById('unraidUrl');
+                    const envOverride = document.getElementById('unraidEnvOverride');
+                    const configSection = document.getElementById('unraidConfigSection');
+
+                    // Populate fields
+                    enabledChk.checked = status.enabled;
+                    if (status.url) urlInput.value = status.url;
+
+                    // Show env override warning if applicable
+                    if (status.envOverride) {
+                        envOverride.style.display = 'flex';
+                    }
+
+                    // Update hint
+                    if (status.enabled) {
+                        hint.textContent = `${status.appCount} app(s) discovered`;
+                        hint.style.color = 'var(--green)';
+                        refreshBtn.style.display = 'flex';
+                        configSection.style.display = 'block';
+                    } else {
+                        hint.textContent = 'Not enabled';
+                        hint.style.color = 'var(--text-muted)';
+                        refreshBtn.style.display = 'none';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load Unraid discovery status:', e);
+            }
+        }
+
+        async function refreshUnraidDiscovery() {
+            try {
+                const resp = await fetch('/api/admin/unraid-discovery', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    showToast('Refreshing Unraid discovery...');
+                    setTimeout(loadUnraidDiscoveryStatus, 2000);
+                }
+            } catch (e) {
+                showToast('Failed to refresh');
+            }
+        }
+
+        async function testUnraidConnection() {
+            const url = document.getElementById('unraidUrl').value;
+            const apiKey = document.getElementById('unraidApiKey').value;
+            const result = document.getElementById('unraidTestResult');
+
+            if (!url || !apiKey) {
+                result.textContent = 'Please fill in URL and API key';
+                result.style.color = 'var(--orange)';
+                return;
+            }
+            result.textContent = 'Testing...';
+            result.style.color = 'var(--text-secondary)';
+            try {
+                const resp = await fetch('/api/admin/unraid-discovery/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, apiKey }),
+                    credentials: 'include'
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    result.textContent = data.message;
+                    result.style.color = 'var(--green)';
+                } else {
+                    result.textContent = data.error || 'Connection failed';
+                    result.style.color = 'var(--red)';
+                }
+            } catch (e) {
+                result.textContent = 'Test failed: ' + e.message;
+                result.style.color = 'var(--red)';
+            }
+        }
+
         // Save all discovery settings
         async function saveDiscoverySettings() {
             const btn = document.getElementById('saveDiscoveryConfig');
@@ -485,6 +577,18 @@
                     credentials: 'include'
                 });
 
+                // Save Unraid settings
+                await fetch('/api/admin/unraid-discovery', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: document.getElementById('unraidDiscoveryEnabled').checked,
+                        url: document.getElementById('unraidUrl').value,
+                        apiKey: document.getElementById('unraidApiKey').value
+                    }),
+                    credentials: 'include'
+                });
+
                 showToast('Discovery settings saved successfully');
                 clearDiscoveryDirty();
 
@@ -494,6 +598,7 @@
                 await loadNginxDiscoveryStatus();
                 await loadNPMDiscoveryStatus();
                 await loadCaddyDiscoveryStatus();
+                await loadUnraidDiscoveryStatus();
 
             } catch (e) {
                 showToast('Error saving settings: ' + e.message);

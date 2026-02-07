@@ -179,6 +179,9 @@ type SystemConfig struct {
 	CaddyAdminURL           string `json:"caddyAdminUrl"`
 	CaddyUsername           string `json:"caddyUsername"`
 	CaddyPassword           string `json:"-"`
+	UnraidDiscoveryEnabled  bool   `json:"unraidDiscoveryEnabled"`
+	UnraidURL               string `json:"unraidUrl"`
+	UnraidAPIKey            string `json:"-"`
 }
 
 // LDAPAuthConfig holds runtime LDAP authentication configuration.
@@ -238,4 +241,26 @@ type TraefikRouter struct {
 	EntryPoints []string `json:"entryPoints"`
 	Rule        string   `json:"rule"`
 	Service     string   `json:"service"`
+}
+
+// UnraidGraphQLResponse is the response from the Unraid GraphQL API.
+type UnraidGraphQLResponse struct {
+	Data struct {
+		Docker struct {
+			Containers []UnraidContainer `json:"containers"`
+		} `json:"docker"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors,omitempty"`
+}
+
+// UnraidContainer represents a Docker container from the Unraid GraphQL API.
+type UnraidContainer struct {
+	ID        string            `json:"id"`
+	Names     []string          `json:"names"`
+	State     string            `json:"state"` // RUNNING, PAUSED, EXITED
+	Labels    map[string]string `json:"labels"`
+	Image     string            `json:"image"`
+	AutoStart bool              `json:"autoStart"`
 }
