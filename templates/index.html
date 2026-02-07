@@ -1583,6 +1583,87 @@ environment:
 
                     <div class="settings-divider"></div>
 
+                    <!-- Unraid Discovery -->
+                    <div class="admin-section" id="unraidDiscoverySection">
+                        <div class="admin-section-header">
+                            <h3 class="admin-section-title">Unraid Discovery</h3>
+                            <button class="settings-btn" onclick="refreshUnraidDiscovery()" id="unraidRefreshBtn" style="padding: 6px 12px; font-size: 12px; display: none;">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M23 4v6h-6"/>
+                                    <path d="M1 20v-6h6"/>
+                                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                        <p class="settings-desc" style="margin-bottom: 12px;">Automatically discover Docker containers from Unraid with WebUI configured</p>
+
+                        <div class="settings-row">
+                            <div class="settings-label">
+                                <span>Enable Unraid Discovery</span>
+                                <span class="settings-hint" id="unraidStatusHint">Not configured</span>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" id="unraidDiscoveryEnabled" onchange="markDiscoveryDirty(); toggleUnraidSection()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Unraid Config Section -->
+                        <div id="unraidConfigSection" class="auth-config-section" style="display: none;">
+                            <div class="auth-config-inner">
+                                <div class="admin-form-group">
+                                    <label for="unraidUrl">Unraid Server URL *</label>
+                                    <input type="url" id="unraidUrl" class="admin-input" placeholder="http://tower.local" onchange="markDiscoveryDirty()">
+                                </div>
+                                <div class="admin-form-group">
+                                    <label for="unraidApiKey">API Key *</label>
+                                    <input type="password" id="unraidApiKey" class="admin-input" placeholder="Enter API key" onchange="markDiscoveryDirty()">
+                                </div>
+                                <p class="settings-desc" style="margin-bottom: 8px;">Generate API key at Settings → Management Access → API Keys (requires Unraid 7.2+ or Connect plugin)</p>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                                    <button class="settings-btn" onclick="testUnraidConnection()">Test Connection</button>
+                                    <span id="unraidTestResult" style="font-size: 12px;"></span>
+                                </div>
+                                <div id="unraidEnvOverride" class="env-override-notice" style="display: none; margin-top: 8px;">
+                                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                                    </svg>
+                                    <span>Controlled by UNRAID_DISCOVERY environment variable. UI changes won't take effect until the env var is removed.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Unraid Help Section -->
+                        <div id="unraidDiscoveryHelp" style="margin-top: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px;">
+                            <p style="font-size: 13px; margin-bottom: 8px; font-weight: 500;">Setup Instructions</p>
+
+                            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;"><strong>Option 1: Configure via UI (recommended)</strong></p>
+                            <ol style="font-size: 12px; color: var(--text-secondary); margin-left: 16px; line-height: 1.8; margin-bottom: 12px;">
+                                <li>Enter your Unraid server URL and API key above</li>
+                                <li>Click "Test Connection" to verify access</li>
+                                <li>Enable the toggle and click "Save Discovery Settings"</li>
+                            </ol>
+
+                            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;"><strong>Option 2: Configure via Environment</strong></p>
+                            <ul style="font-size: 12px; color: var(--text-secondary); margin-left: 16px; line-height: 1.8; margin-bottom: 12px;">
+                                <li><code>UNRAID_URL=http://tower.local</code></li>
+                                <li><code>UNRAID_API_KEY=your-api-key</code></li>
+                                <li><code>UNRAID_DISCOVERY=true</code></li>
+                            </ul>
+
+                            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;"><strong>docker-compose.yml example:</strong></p>
+                            <pre style="font-size: 11px; background: var(--bg-secondary); padding: 8px; border-radius: 4px; overflow-x: auto;">environment:
+  - UNRAID_URL=http://tower.local
+  - UNRAID_API_KEY=your-api-key
+  - UNRAID_DISCOVERY=true</pre>
+
+                            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">Only containers with a WebUI URL configured will be discovered.</p>
+                        </div>
+                    </div>
+
+                    <div class="settings-divider"></div>
+
                     <!-- Save Button -->
                     <div style="display: flex; justify-content: flex-end; padding: 8px 0;">
                         <button class="settings-btn admin-btn-primary" id="saveDiscoveryConfig" onclick="saveDiscoverySettings()" disabled>

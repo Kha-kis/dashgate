@@ -38,6 +38,9 @@ func GetAllRawDiscoveredApps(app *server.App) []models.DiscoveredAppWithOverride
 	if app.CaddyDiscovery.Enabled {
 		addApps(app.CaddyDiscovery.GetApps(), "caddy")
 	}
+	if app.UnraidDiscovery.Enabled {
+		addApps(app.UnraidDiscovery.GetApps(), "unraid")
+	}
 
 	return result
 }

@@ -147,6 +147,12 @@ func LoadSystemConfig(app *server.App) error {
 			app.SystemConfig.CaddyUsername = value
 		case "caddy_password":
 			app.SystemConfig.CaddyPassword = value
+		case "unraid_discovery_enabled":
+			app.SystemConfig.UnraidDiscoveryEnabled = value == "true"
+		case "unraid_url":
+			app.SystemConfig.UnraidURL = value
+		case "unraid_api_key":
+			app.SystemConfig.UnraidAPIKey = value
 		}
 	}
 
@@ -222,6 +228,9 @@ func SaveSystemConfig(app *server.App) error {
 		"caddy_admin_url":           app.SystemConfig.CaddyAdminURL,
 		"caddy_username":            app.SystemConfig.CaddyUsername,
 		"caddy_password":            app.SystemConfig.CaddyPassword,
+		"unraid_discovery_enabled":  strconv.FormatBool(app.SystemConfig.UnraidDiscoveryEnabled),
+		"unraid_url":                app.SystemConfig.UnraidURL,
+		"unraid_api_key":            app.SystemConfig.UnraidAPIKey,
 	}
 	app.SysConfigMu.RUnlock()
 

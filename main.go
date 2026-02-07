@@ -26,7 +26,7 @@ import (
 
 // Version is set at build time via -ldflags "-X main.Version=...".
 // Falls back to "dev" for local development.
-var Version = "1.0.6"
+var Version = "1.0.7"
 
 // neuteredFileSystem wraps http.FileSystem to disable directory listings.
 // Requests for directories without an index.html will return 404.
@@ -132,6 +132,7 @@ func main() {
 	discovery.InitNginxDiscovery(app)
 	discovery.InitNPMDiscovery(app)
 	discovery.InitCaddyDiscovery(app)
+	discovery.InitUnraidDiscovery(app)
 
 	// Security middleware
 	loginRateLimit := 5
@@ -270,6 +271,8 @@ func main() {
 	mux.HandleFunc("/api/admin/traefik-discovery/test", auth.RequireAdmin(app, handlers.TraefikTestHandler(app)))
 	mux.HandleFunc("/api/admin/npm-discovery/test", auth.RequireAdmin(app, handlers.NPMTestHandler(app)))
 	mux.HandleFunc("/api/admin/caddy-discovery/test", auth.RequireAdmin(app, handlers.CaddyTestHandler(app)))
+	mux.HandleFunc("/api/admin/unraid-discovery", auth.RequireAdmin(app, handlers.UnraidDiscoveryHandler(app)))
+	mux.HandleFunc("/api/admin/unraid-discovery/test", auth.RequireAdmin(app, handlers.UnraidTestHandler(app)))
 
 	// Backup/Restore
 	mux.HandleFunc("/api/admin/backup", auth.RequireAdmin(app, handlers.BackupHandler(app)))
