@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"dashgate/internal/database"
 	"dashgate/internal/discovery"
@@ -844,9 +845,18 @@ func UnraidTestHandler(app *server.App) http.HandlerFunc {
 		containerCount, err := discovery.TestUnraidConnection(app.HTTPClient, req.URL, req.APIKey)
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
+			status := http.StatusBadGateway
+			errStr := err.Error()
+			switch {
+			case strings.Contains(errStr, "authentication failed"):
+				status = http.StatusUnauthorized
+			case strings.Contains(errStr, "SSRF protection") || strings.Contains(errStr, "Invalid URL"):
+				status = http.StatusBadRequest
+			}
+			w.WriteHeader(status)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"error":   err.Error(),
+				"error":   errStr,
 			})
 			return
 		}

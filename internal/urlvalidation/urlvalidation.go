@@ -8,7 +8,11 @@ import (
 )
 
 // ValidateDiscoveryURL checks that a URL is safe for server-side requests.
-// It blocks private IPs, loopback, link-local, and cloud metadata endpoints.
+// It blocks loopback, link-local, and cloud metadata endpoints.
+// NOTE: RFC 1918 private addresses (10.x, 172.16-31.x, 192.168.x)
+// are intentionally allowed for self-hosted/Unraid setups.
+// For deployment contexts where this is undesirable, add additional
+// caller-side restrictions before passing URLs here.
 func ValidateDiscoveryURL(rawURL string) error {
 	if rawURL == "" {
 		return fmt.Errorf("URL is empty")
@@ -52,20 +56,8 @@ func ValidateDiscoveryURL(rawURL string) error {
 		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 			return fmt.Errorf("URL resolves to disallowed address: %s", ipStr)
 		}
-		// Check RFC 1918 private ranges
-		privateRanges := []string{
-			"10.0.0.0/8",
-			"172.16.0.0/12",
-			"192.168.0.0/16",
-		}
-		for _, cidr := range privateRanges {
-			_, network, _ := net.ParseCIDR(cidr)
-			if network.Contains(ip) {
-				// Log warning but allow -- many self-hosted setups use private IPs
-				// This is intentionally a warning, not a block, for self-hosted use
-				break
-			}
-		}
+		// RFC 1918 private ranges are intentionally allowed (not blocked).
+		// Many self-hosted deployments use private IPs for Unraid servers.
 	}
 
 	return nil

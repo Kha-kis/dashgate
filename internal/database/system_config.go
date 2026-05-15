@@ -293,6 +293,11 @@ func ApplySystemConfig(app *server.App) {
 		app.AuthConfig.CookieSecure = false
 	}
 
+	// Allow OIDC_DISPLAY_NAME env var to override DB config
+	if dn := os.Getenv("OIDC_DISPLAY_NAME"); dn != "" {
+		app.SystemConfig.OIDCDisplayName = dn
+	}
+
 	// Determine auth mode from enabled providers (for backward compatibility)
 	if app.SystemConfig.ProxyAuthEnabled && app.SystemConfig.LocalAuthEnabled {
 		app.AuthConfig.Mode = models.AuthModeHybrid

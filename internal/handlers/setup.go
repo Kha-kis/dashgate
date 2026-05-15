@@ -171,9 +171,12 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 			app.SystemConfig.LDAPSkipVerify = req.LDAPSkipVerify
 		}
 
+		// Set OIDC display name (always saved, even if OIDC is not enabled,
+		// so the value persists if OIDC is enabled later)
+		app.SystemConfig.OIDCDisplayName = req.OIDCDisplayName
+
 		// Set OIDC settings if enabled
 		if req.OIDCAuthEnabled {
-			app.SystemConfig.OIDCDisplayName = req.OIDCDisplayName
 			app.SystemConfig.OIDCIssuer = req.OIDCIssuer
 			app.SystemConfig.OIDCClientID = req.OIDCClientID
 			app.SystemConfig.OIDCClientSecret = req.OIDCClientSecret

@@ -56,11 +56,16 @@ func InitUnraidDiscovery(app *server.App) {
 		app.SysConfigMu.RLock()
 		log.Printf("Unraid discovery enabled (via environment variable, API: %s)", app.SystemConfig.UnraidURL)
 		app.SysConfigMu.RUnlock()
-	} else if app.SystemConfig.UnraidDiscoveryEnabled && app.SystemConfig.UnraidURL != "" && app.SystemConfig.UnraidAPIKey != "" {
-		StartUnraidDiscoveryLoop(app)
+	} else {
 		app.SysConfigMu.RLock()
-		log.Printf("Unraid discovery enabled (via database config, API: %s)", app.SystemConfig.UnraidURL)
+		dbEnabled := app.SystemConfig.UnraidDiscoveryEnabled
+		dbURL := app.SystemConfig.UnraidURL
+		dbAPIKey := app.SystemConfig.UnraidAPIKey
 		app.SysConfigMu.RUnlock()
+		if dbEnabled && dbURL != "" && dbAPIKey != "" {
+			StartUnraidDiscoveryLoop(app)
+			log.Printf("Unraid discovery enabled (via database config, API: %s)", dbURL)
+		}
 	}
 }
 
@@ -258,6 +263,12 @@ func processUnraidWebUIURL(webUIURL, unraidURL string) string {
 		}
 		defaultPort := result[start+6 : start+end]
 		result = result[:start] + defaultPort + result[start+end+1:]
+	}
+
+	// Validate the constructed URL is well-formed
+	if _, err := url.Parse(result); err != nil {
+		// If the URL is malformed, return the original raw value as a fallback
+		return webUIURL
 	}
 
 	return result

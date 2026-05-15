@@ -31,12 +31,24 @@ mkdir -p /config/icons 2>/dev/null || {
 	echo "Warning: could not create /config/icons, trying without parent dirs"
 	mkdir -p /config/icons 2>/dev/null || true
 }
-chown -R "$PUID:$PGID" /config 2>/dev/null || {
-	echo "Warning: chown failed (FUSE/NAS filesystem?), falling back to chmod"
-	chmod -R 777 /config 2>/dev/null || {
-		echo "Warning: chmod also failed, container may have permission issues"
-	}
-}
+chown -R "$PUID:$PGID" /config 2>/dev/null
+# Verify that the dashgate user can write to /config.
+# On FUSE/NAS filesystems (e.g., Unraid /mnt/user/appdata), chown may appear
+# to succeed or fail silently without actually granting write access.
+if ! su-exec dashgate touch /config/.write-test 2>/dev/null; then
+	echo "Warning: dashgate user cannot write to /config"
+	if [ "$(stat -c '%u' /config 2>/dev/null)" != "$PUID" ]; then
+		echo "Warning: chown appears to have had no effect (FUSE/NAS filesystem?), falling back to chmod"
+		chmod -R 750 /config 2>/dev/null || {
+			echo "Warning: chmod also failed, container may have permission issues"
+		}
+	else
+		echo "Warning: ownership is correct but write still failed"
+	fi
+elif [ "$(stat -c '%a' /config/icons 2>/dev/null)" != "750" ]; then
+	chmod -R 750 /config 2>/dev/null || true
+fi
+rm -f /config/.write-test 2>/dev/null || true
 
 # Add dashgate user to docker socket group if socket exists
 DOCKER_SOCK="/var/run/docker.sock"
