@@ -5,63 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.7] - 2026-02-05
+## [1.0.7] - 2026-05-15
 
 ### Added
+
 - **Unraid discovery** — discover Docker containers from Unraid 7.2+ via GraphQL API with `x-api-key` authentication
 - **Unraid CA template support** — handle `[IP]` and `[PORT:default]` placeholders in WebUI URLs, resolve relative icon paths against Unraid server
 - **Unraid connection testing** — test API connectivity and view container count from admin UI
 
+### Fixed
+
+- **Permission denied on /config (#2)** — entrypoint now handles chown failure on FUSE/NAS filesystems (e.g., Unraid `/mnt/user/appdata`) gracefully, falling back to chmod instead of crashing the container
+
 ## [1.0.6] - 2026-02-05
 
 ### Added
+
 - **Multi-select bulk configure for discovered apps** — select multiple discovered apps via checkboxes and configure category and groups in a single operation (#6)
 
 ## [1.0.5] - 2026-02-05
 
 ### Fixed
+
 - **Discovered apps health checks** — discovered apps now included in health checks, showing online/offline status instead of "unknown" (#4)
 
 ## [1.0.4] - 2026-02-05
 
 ### Fixed
+
 - **Discovered app URL Override field** — removed misleading asterisk from optional field, clarified it uses discovered URL if left blank (#4)
 - **Icon selector modal z-index** — icon picker now appears above discovered app modal instead of behind it (#4)
 - **Docker discovery log message** — now shows container count when no apps found (e.g., "found 15 containers, 0 with dashgate.enable=true label") (#5)
 
 ### Changed
+
 - Service worker cache version bumped to v7
 
 ## [1.0.3] - 2026-02-04
 
 ### Added
+
 - **Nginx discovery filtering** — skip noisy paths (auth endpoints, API sub-paths, websocket routes, static assets, health checks) and regex-based location patterns
 - **Nginx discovery deduplication** — sub-paths of already-discovered apps are filtered out per host
 - **Docker socket proxy support** — documented TCP-based socket proxy setup for improved security
 
 ### Fixed
+
 - **NPM discovery type mismatch** — handle `ssl_forced` and `enabled` fields returned as numbers (0/1) instead of booleans (#4)
 - **Docker socket permission denied** — entrypoint auto-detects socket group and adds user to it (#4)
 
 ## [1.0.2] - 2026-02-04
 
 ### Added
+
 - **PUID/PGID support** — container user ID can be configured via environment variables for NAS compatibility (Unraid, TrueNAS) (#2)
 - **COOKIE_SECURE environment variable** — override secure cookie setting without admin access
 
 ### Fixed
+
 - **Login not working behind reverse proxy** — auto-detect HTTPS via `X-Forwarded-Proto` header for proper cookie Secure flag (#3)
 - **Permission denied on /config** — entrypoint now adjusts file ownership to match PUID/PGID (#2)
 
 ## [1.0.1] - 2026-01-30
 
 ### Added
+
 - **Nginx location block discovery** — apps defined as `location /app { proxy_pass ...; }` within server blocks are now discovered, not just standalone server blocks
 - **Nginx include inlining** — `include` directives (including glob patterns like `/etc/nginx/apps/*.conf`) are resolved and parsed recursively (depth-limited to 3)
 - **Extensionless config file support** — Nginx `sites-enabled/` files without `.conf` extension are now processed
 - **Icon persistence** — uploaded icons now stored in `/config/icons/` (persistent volume) instead of inside the container; bundled icons seeded on first run
 
 ### Changed
+
 - Branding files (favicon, PWA icons) moved from `static/icons/` to `static/branding/` — no longer appear in admin icon picker
 - `ICONS_PATH` default changed from `/app/static/icons` to `/config/icons`
 - Service worker cache version bumped to v5
@@ -72,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Panic recovery in discovery goroutines now logs stack traces
 
 ### Fixed
+
 - Health check falls back to GET when HEAD returns non-success (fixes false "offline" for apps like File Browser that don't handle HEAD)
 - File descriptor leak in `neuteredFileSystem` directory index check
 - Double-unlock risk in all discovery Stop functions (nginx, docker, traefik, caddy, npm)
@@ -81,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom icons in `/config/icons/` now take priority over bundled icons with cascading fallback (#1)
 
 ### Security
+
 - Symlinks skipped during icon seeding to prevent sensitive file exposure
 
 ## [1.0.0] - 2025-01-30
