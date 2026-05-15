@@ -702,3 +702,101 @@ async function restoreFromBackup(input) {
 
   input.value = "";
 }
+
+let importPreviewApps = [];
+let importSource = "";
+
+async function previewImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  importSource = document.getElementById("importSource").value;
+
+  try {
+    const content = await file.text();
+    const resp = await fetch("/api/admin/import/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ source: importSource, content: content }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      showToast("Parse error: " + err);
+      return;
+    }
+
+    const result = await resp.json();
+    importPreviewApps = result.apps || [];
+
+    const preview = document.getElementById("importPreview");
+    const count = document.getElementById("importPreviewCount");
+    const list = document.getElementById("importAppList");
+    const warnings = document.getElementById("importWarnings");
+
+    count.textContent = `${importPreviewApps.length} apps found`;
+    preview.style.display = "block";
+
+    list.innerHTML = importPreviewApps
+      .map(
+        (a, i) =>
+          `<div style="padding: 6px 8px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-light)">
+            <span style="flex: 1; font-weight: 500">${escapeHtml(a.name)}</span>
+            <span style="color: var(--text-tertiary); font-size: 13px">${escapeHtml(a.category)}</span>
+            <a href="${escapeHtml(a.url)}" target="_blank" style="color: var(--blue); font-size: 13px">↗</a>
+          </div>`,
+      )
+      .join("");
+
+    if (result.warnings && result.warnings.length) {
+      warnings.innerHTML = result.warnings
+        .map((w) => escapeHtml(w))
+        .join("<br>");
+    } else {
+      warnings.innerHTML = "";
+    }
+  } catch (e) {
+    showToast("Error: " + e.message);
+  }
+
+  input.value = "";
+}
+
+async function applyImport() {
+  if (!importPreviewApps.length) {
+    showToast("No apps to import");
+    return;
+  }
+
+  try {
+    const resp = await fetch("/api/admin/import/apply", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        source: importSource,
+        apps: importPreviewApps,
+        categories: {},
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      showToast("Import error: " + err);
+      return;
+    }
+
+    const result = await resp.json();
+    showToast(`Imported ${result.count} apps successfully`);
+
+    document.getElementById("importPreview").style.display = "none";
+    importPreviewApps = [];
+
+    if (confirm("Import complete. Reload page to see changes?")) {
+      location.reload();
+    }
+  } catch (e) {
+    showToast("Error: " + e.message);
+  }
+}

@@ -26,7 +26,7 @@ import (
 
 // Version is set at build time via -ldflags "-X main.Version=...".
 // Falls back to "dev" for local development.
-var Version = "1.0.9"
+var Version = "1.1.0"
 
 // neuteredFileSystem wraps http.FileSystem to disable directory listings.
 // Requests for directories without an index.html will return 404.
@@ -277,6 +277,10 @@ func main() {
 	// Backup/Restore
 	mux.HandleFunc("/api/admin/backup", auth.RequireAdmin(app, handlers.BackupHandler(app)))
 	mux.HandleFunc("/api/admin/restore", auth.RequireAdmin(app, handlers.RestoreHandler(app)))
+
+	// Import
+	mux.HandleFunc("/api/admin/import/preview", auth.RequireAdmin(app, handlers.ImportPreviewHandler(app)))
+	mux.HandleFunc("/api/admin/import/apply", auth.RequireAdmin(app, handlers.ImportApplyHandler(app)))
 
 	// Apply middleware chain: body size limit → rate limiting → CSRF → security headers
 	bodySizeLimited := middleware.MaxBodySize(1<<20, mux) // 1 MB max request body

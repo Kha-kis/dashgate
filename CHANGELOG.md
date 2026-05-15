@@ -2,8 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.1.0] - 2026-05-15
+
+### Added
+
+- **Import from other dashboards** — migrate apps from Homepage (services.yaml), Homarr (board JSON), and Heimdall (items.json) via Admin > Content > Import
+- **Imported apps** go directly into your existing categories or a new "Imported" category
 
 ## [1.0.9] - 2026-05-15
 
@@ -16,6 +20,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Permission denied on /config (#2)** — entrypoint now handles chown failure on FUSE/NAS filesystems (e.g., Unraid `/mnt/user/appdata`) gracefully, falling back to chmod instead of crashing the container
+
+## [1.0.8] - 2026-05-15
+
+### Added
+
+- **Customizable OIDC/SSO button label (#10)** — set a custom display name for the OIDC login button via admin panel or `OIDC_DISPLAY_NAME` env var
+
+## [1.0.7] - 2026-05-15
+
+### Added
+
+- **Unraid GraphQL discovery** — discover Docker containers from Unraid 7.2+ via GraphQL API
+- **Unraid CA template support** — handle `[IP]` and `[PORT:default]` placeholders in WebUI URLs
+
+### Fixed
+
+- **Permission denied on /config (#2)** — entrypoint handles chown failure on FUSE/NAS gracefully
 
 ## [1.0.6] - 2026-02-05
 

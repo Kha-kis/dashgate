@@ -3638,6 +3638,103 @@ environment:
 
               <div class="settings-divider"></div>
 
+              <!-- Import from Other Dashboards -->
+              <div class="admin-section">
+                <div class="admin-section-header">
+                  <h3 class="admin-section-title">
+                    Import from Other Dashboards
+                  </h3>
+                </div>
+                <p class="settings-desc" style="margin-bottom: 12px">
+                  Migrate apps from Homepage, Homarr, or Heimdall
+                </p>
+
+                <div style="display: flex; gap: 8px; margin-bottom: 12px">
+                  <select
+                    id="importSource"
+                    class="settings-select"
+                    style="flex: 1"
+                  >
+                    <option value="homepage">Homepage (services.yaml)</option>
+                    <option value="homarr">Homarr (board JSON)</option>
+                    <option value="heimdall">Heimdall (items.json)</option>
+                  </select>
+                  <label
+                    class="settings-btn"
+                    style="
+                      cursor: pointer;
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                    "
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    Upload Config
+                    <input
+                      type="file"
+                      id="importFileInput"
+                      accept=".yaml,.yml,.json"
+                      onchange="previewImport(this)"
+                      style="display: none"
+                    />
+                  </label>
+                </div>
+
+                <div id="importPreview" style="display: none; margin-top: 12px">
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      margin-bottom: 8px;
+                    "
+                  >
+                    <span
+                      id="importPreviewCount"
+                      style="font-weight: 500"
+                    ></span>
+                    <button
+                      class="settings-btn"
+                      onclick="applyImport()"
+                      style="background: var(--green); color: #000"
+                    >
+                      Import All
+                    </button>
+                  </div>
+                  <div
+                    id="importAppList"
+                    style="
+                      max-height: 300px;
+                      overflow-y: auto;
+                      border: 1px solid var(--border);
+                      border-radius: 8px;
+                      padding: 8px;
+                    "
+                  ></div>
+                  <div
+                    id="importWarnings"
+                    style="
+                      margin-top: 8px;
+                      font-size: 12px;
+                      color: var(--orange);
+                    "
+                  ></div>
+                </div>
+              </div>
+
+              <div class="settings-divider"></div>
+
               <!-- App Management -->
               <div class="admin-section">
                 <div class="admin-section-header">
