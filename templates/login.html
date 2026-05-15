@@ -1,343 +1,407 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#000000">
-    <link rel="icon" type="image/x-icon" href="/static/branding/favicon.ico?v={{.Version}}">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/branding/favicon-32x32.png?v={{.Version}}">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/branding/favicon-16x16.png?v={{.Version}}">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/branding/apple-touch-icon.png?v={{.Version}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <link
+      rel="icon"
+      type="image/x-icon"
+      href="/static/branding/favicon.ico?v={{.Version}}"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/branding/favicon-32x32.png?v={{.Version}}"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/branding/favicon-16x16.png?v={{.Version}}"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/branding/apple-touch-icon.png?v={{.Version}}"
+    />
     <title>Login - DashGate</title>
-    <link rel="stylesheet" href="/static/fonts/inter.css?v={{.Version}}">
-    <link rel="stylesheet" href="/static/css/base.css?v={{.Version}}">
+    <link rel="stylesheet" href="/static/fonts/inter.css?v={{.Version}}" />
+    <link rel="stylesheet" href="/static/css/base.css?v={{.Version}}" />
     <style>
-        .login-container {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            max-width: 400px;
-            padding: 20px;
-        }
+      .login-container {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 400px;
+        padding: 20px;
+      }
 
-        .login-card {
-            background: var(--bg-secondary);
-            border-radius: 20px;
-            padding: 40px 32px;
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-        }
+      .login-card {
+        background: var(--bg-secondary);
+        border-radius: 20px;
+        padding: 40px 32px;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+      }
 
-        .login-header {
-            text-align: center;
-            margin-bottom: 32px;
-        }
+      .login-header {
+        text-align: center;
+        margin-bottom: 32px;
+      }
 
-        .login-icon {
-            width: 72px;
-            height: 72px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
-        }
+      .login-icon {
+        width: 72px;
+        height: 72px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+      }
 
-        .login-icon svg {
-            width: 36px;
-            height: 36px;
-            color: white;
-        }
+      .login-icon svg {
+        width: 36px;
+        height: 36px;
+        color: white;
+      }
 
-        .login-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
+      .login-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
 
-        .login-subtitle {
-            font-size: 14px;
-            color: var(--text-tertiary);
-        }
+      .login-subtitle {
+        font-size: 14px;
+        color: var(--text-tertiary);
+      }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+      .form-group {
+        margin-bottom: 20px;
+      }
 
-        .form-input {
-            padding: 14px 16px;
-            border-radius: 12px;
-            font-size: 16px;
-        }
+      .form-input {
+        padding: 14px 16px;
+        border-radius: 12px;
+        font-size: 16px;
+      }
 
-        .login-btn {
-            width: 100%;
-            padding: 14px 24px;
-            background: var(--accent);
-            border: none;
-            border-radius: 12px;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.2s, opacity 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
+      .login-btn {
+        width: 100%;
+        padding: 14px 24px;
+        background: var(--accent);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition:
+          background 0.2s,
+          transform 0.2s,
+          opacity 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
 
-        .login-btn:hover {
-            background: var(--accent-hover);
-            transform: translateY(-1px);
-        }
+      .login-btn:hover {
+        background: var(--accent-hover);
+        transform: translateY(-1px);
+      }
 
-        .login-btn:active {
-            transform: translateY(0);
-        }
+      .login-btn:active {
+        transform: translateY(0);
+      }
 
-        .login-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+      .login-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
 
-        .login-btn .spinner {
-            display: none;
-        }
+      .login-btn .spinner {
+        display: none;
+      }
 
-        .login-btn.loading .spinner {
-            display: block;
-        }
+      .login-btn.loading .spinner {
+        display: block;
+      }
 
-        .login-btn.loading .btn-text {
-            display: none;
-        }
+      .login-btn.loading .btn-text {
+        display: none;
+      }
 
-        .footer-text {
-            text-align: center;
-            margin-top: 24px;
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
+      .footer-text {
+        text-align: center;
+        margin-top: 24px;
+        font-size: 12px;
+        color: var(--text-tertiary);
+      }
 
-        .divider {
-            display: flex;
-            align-items: center;
-            margin: 24px 0;
-            color: var(--text-tertiary);
-            font-size: 13px;
-        }
+      .divider {
+        display: flex;
+        align-items: center;
+        margin: 24px 0;
+        color: var(--text-tertiary);
+        font-size: 13px;
+      }
 
-        .divider::before,
-        .divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--border);
-        }
+      .divider::before,
+      .divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
 
-        .divider span {
-            padding: 0 16px;
-        }
+      .divider span {
+        padding: 0 16px;
+      }
 
-        .oidc-btn {
-            width: 100%;
-            padding: 14px 24px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            color: var(--text-primary);
-            font-size: 16px;
-            font-weight: 500;
-            font-family: inherit;
-            cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
+      .oidc-btn {
+        width: 100%;
+        padding: 14px 24px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text-primary);
+        font-size: 16px;
+        font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+        transition:
+          background 0.2s,
+          border-color 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
 
-        .oidc-btn:hover {
-            background: var(--bg-elevated);
-            border-color: var(--text-tertiary);
-        }
+      .oidc-btn:hover {
+        background: var(--bg-elevated);
+        border-color: var(--text-tertiary);
+      }
 
-        .oidc-btn svg {
-            color: var(--accent);
-        }
+      .oidc-btn svg {
+        color: var(--accent);
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="bg-gradient"></div>
 
     <div class="login-container">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="login-icon">
-                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
-                </div>
-                <h1 class="login-title">Welcome Back</h1>
-                <p class="login-subtitle">Sign in to access your apps</p>
-            </div>
-
-            <div class="error-message" id="errorMessage" aria-live="assertive" role="alert"></div>
-
-            <form id="loginForm">
-                <div class="form-group">
-                    <label class="form-label" for="username">Username</label>
-                    <input type="text" id="username" name="username" class="form-input"
-                           placeholder="Enter your username" autocomplete="username" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="password">Password</label>
-                    <input type="password" id="password" name="password" class="form-input"
-                           placeholder="Enter your password" autocomplete="current-password" required>
-                </div>
-
-                <button type="submit" class="login-btn" id="loginBtn">
-                    <span class="btn-text">Sign In</span>
-                    <span class="spinner"></span>
-                </button>
-            </form>
-
-            <div id="oidcSection" style="display: none;">
-                <div class="divider">
-                    <span>or</span>
-                </div>
-                <button class="oidc-btn" onclick="loginWithOIDC()">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/>
-                        <polyline points="10 17 15 12 10 7"/>
-                        <line x1="15" y1="12" x2="3" y2="12"/>
-                    </svg>
-                    <span>Sign in with SSO</span>
-                </button>
-            </div>
-
-            <p class="footer-text" id="footerText">Protected by local authentication</p>
+      <div class="login-card">
+        <div class="login-header">
+          <div class="login-icon">
+            <svg
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+          </div>
+          <h1 class="login-title">Welcome Back</h1>
+          <p class="login-subtitle">Sign in to access your apps</p>
         </div>
+
+        <div
+          class="error-message"
+          id="errorMessage"
+          aria-live="assertive"
+          role="alert"
+        ></div>
+
+        <form id="loginForm">
+          <div class="form-group">
+            <label class="form-label" for="username">Username</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              class="form-input"
+              placeholder="Enter your username"
+              autocomplete="username"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              class="form-input"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+
+          <button type="submit" class="login-btn" id="loginBtn">
+            <span class="btn-text">Sign In</span>
+            <span class="spinner"></span>
+          </button>
+        </form>
+
+        <div id="oidcSection" style="display: none">
+          <div class="divider">
+            <span>or</span>
+          </div>
+          <button class="oidc-btn" onclick="loginWithOIDC()">
+            <svg
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
+              <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" />
+              <polyline points="10 17 15 12 10 7" />
+              <line x1="15" y1="12" x2="3" y2="12" />
+            </svg>
+            <span
+              >Sign in with {{if
+              .OIDCDisplayName}}{{.OIDCDisplayName}}{{else}}SSO{{end}}</span
+            >
+          </button>
+        </div>
+
+        <p class="footer-text" id="footerText">
+          Protected by local authentication
+        </p>
+      </div>
     </div>
 
     <script nonce="{{.CSPNonce}}">
-        // CSRF helper: read the dashgate_csrf cookie for the double-submit pattern
-        function getCSRFToken() {
-            const match = document.cookie.match(/(?:^|;\s*)dashgate_csrf=([^;]*)/);
-            return match ? decodeURIComponent(match[1]) : '';
-        }
+      // CSRF helper: read the dashgate_csrf cookie for the double-submit pattern
+      function getCSRFToken() {
+        const match = document.cookie.match(/(?:^|;\s*)dashgate_csrf=([^;]*)/);
+        return match ? decodeURIComponent(match[1]) : "";
+      }
 
-        const form = document.getElementById('loginForm');
-        const errorMsg = document.getElementById('errorMessage');
-        const loginBtn = document.getElementById('loginBtn');
+      const form = document.getElementById("loginForm");
+      const errorMsg = document.getElementById("errorMessage");
+      const loginBtn = document.getElementById("loginBtn");
 
-        // Check auth config on load
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                const resp = await fetch('/api/auth/config');
-                if (resp.ok) {
-                    const config = await resp.json();
+      // Check auth config on load
+      document.addEventListener("DOMContentLoaded", async () => {
+        try {
+          const resp = await fetch("/api/auth/config");
+          if (resp.ok) {
+            const config = await resp.json();
 
-                    // Show OIDC button if enabled
-                    if (config.oidcEnabled) {
-                        document.getElementById('oidcSection').style.display = 'block';
-                    }
-
-                    // Update footer text based on available auth methods
-                    const methods = [];
-                    if (config.localEnabled) methods.push('local');
-                    if (config.ldapEnabled) methods.push('LDAP');
-                    if (config.oidcEnabled) methods.push('SSO');
-
-                    if (methods.length > 0) {
-                        document.getElementById('footerText').textContent =
-                            `Authentication: ${methods.join(', ')}`;
-                    }
-
-                    // If only OIDC is enabled, auto-redirect
-                    if (config.oidcEnabled && !config.localEnabled && !config.ldapEnabled) {
-                        document.getElementById('loginForm').style.display = 'none';
-                        document.querySelector('.divider').style.display = 'none';
-                        // Auto-redirect to OIDC after a short delay
-                        setTimeout(() => loginWithOIDC(), 500);
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to load auth config:', e);
+            // Show OIDC button if enabled
+            if (config.oidcEnabled) {
+              document.getElementById("oidcSection").style.display = "block";
             }
 
-            // Focus username field
-            document.getElementById('username').focus();
-        });
+            // Update footer text based on available auth methods
+            const methods = [];
+            if (config.localEnabled) methods.push("local");
+            if (config.ldapEnabled) methods.push("LDAP");
+            if (config.oidcEnabled)
+              methods.push(config.oidcDisplayName || "SSO");
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
-
-            if (!username || !password) {
-                showError('Please enter both username and password');
-                return;
+            if (methods.length > 0) {
+              document.getElementById("footerText").textContent =
+                `Authentication: ${methods.join(", ")}`;
             }
 
-            // Show loading state
-            loginBtn.classList.add('loading');
-            loginBtn.disabled = true;
-            hideError();
-
-            try {
-                const resp = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': getCSRFToken()
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({ username, password })
-                });
-
-                if (resp.ok) {
-                    const data = await resp.json();
-                    // Validate redirect is a safe relative URL
-                    let redirect = data.redirect || '/';
-                    if (!redirect.startsWith('/') || redirect.startsWith('//')) {
-                        redirect = '/';
-                    }
-                    window.location.href = redirect;
-                } else {
-                    const text = await resp.text();
-                    showError(text || 'Login failed. Please try again.');
-                }
-            } catch (err) {
-                showError('Connection error. Please try again.');
-            } finally {
-                loginBtn.classList.remove('loading');
-                loginBtn.disabled = false;
+            // If only OIDC is enabled, auto-redirect
+            if (
+              config.oidcEnabled &&
+              !config.localEnabled &&
+              !config.ldapEnabled
+            ) {
+              document.getElementById("loginForm").style.display = "none";
+              document.querySelector(".divider").style.display = "none";
+              // Auto-redirect to OIDC after a short delay
+              setTimeout(() => loginWithOIDC(), 500);
             }
-        });
-
-        function loginWithOIDC() {
-            window.location.href = '/auth/oidc';
+          }
+        } catch (e) {
+          console.error("Failed to load auth config:", e);
         }
 
-        function showError(msg) {
-            errorMsg.textContent = msg;
-            errorMsg.classList.add('show');
+        // Focus username field
+        document.getElementById("username").focus();
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+
+        if (!username || !password) {
+          showError("Please enter both username and password");
+          return;
         }
 
-        function hideError() {
-            errorMsg.classList.remove('show');
+        // Show loading state
+        loginBtn.classList.add("loading");
+        loginBtn.disabled = true;
+        hideError();
+
+        try {
+          const resp = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": getCSRFToken(),
+            },
+            credentials: "include",
+            body: JSON.stringify({ username, password }),
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            // Validate redirect is a safe relative URL
+            let redirect = data.redirect || "/";
+            if (!redirect.startsWith("/") || redirect.startsWith("//")) {
+              redirect = "/";
+            }
+            window.location.href = redirect;
+          } else {
+            const text = await resp.text();
+            showError(text || "Login failed. Please try again.");
+          }
+        } catch (err) {
+          showError("Connection error. Please try again.");
+        } finally {
+          loginBtn.classList.remove("loading");
+          loginBtn.disabled = false;
         }
+      });
+
+      function loginWithOIDC() {
+        window.location.href = "/auth/oidc";
+      }
+
+      function showError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.classList.add("show");
+      }
+
+      function hideError() {
+        errorMsg.classList.remove("show");
+      }
     </script>
-</body>
+  </body>
 </html>

@@ -72,6 +72,7 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 			LDAPStartTLS     bool   `json:"ldapStartTLS"`
 			LDAPSkipVerify   bool   `json:"ldapSkipVerify"`
 			// OIDC settings
+			OIDCDisplayName  string `json:"oidcDisplayName"`
 			OIDCIssuer       string `json:"oidcIssuer"`
 			OIDCClientID     string `json:"oidcClientID"`
 			OIDCClientSecret string `json:"oidcClientSecret"`
@@ -172,6 +173,7 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 
 		// Set OIDC settings if enabled
 		if req.OIDCAuthEnabled {
+			app.SystemConfig.OIDCDisplayName = req.OIDCDisplayName
 			app.SystemConfig.OIDCIssuer = req.OIDCIssuer
 			app.SystemConfig.OIDCClientID = req.OIDCClientID
 			app.SystemConfig.OIDCClientSecret = req.OIDCClientSecret

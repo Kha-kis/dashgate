@@ -22,13 +22,13 @@ type App struct {
 	DBMu sync.RWMutex
 
 	// YAML config (categories + apps)
-	Config   models.Config
-	ConfigMu sync.RWMutex
+	Config     models.Config
+	ConfigMu   sync.RWMutex
 	ConfigPath string
 
 	// System config (stored in DB, configurable via UI)
-	SystemConfig    models.SystemConfig
-	SysConfigMu     sync.RWMutex
+	SystemConfig     models.SystemConfig
+	SysConfigMu      sync.RWMutex
 	TrustedProxyNets []*net.IPNet
 	TrustedProxyIPs  []net.IP
 
@@ -148,15 +148,15 @@ func (dm *DiscoveryManager) ClearApps() {
 // New creates and initializes a new App instance.
 func New() *App {
 	return &App{
-		HealthCache:       make(map[string]string),
-		AppMappings:       make(map[string][]string),
+		HealthCache:         make(map[string]string),
+		AppMappings:         make(map[string][]string),
 		DiscoveredOverrides: make(map[string]*models.DiscoveredAppOverride),
-		DockerDiscovery:   NewDiscoveryManager(),
-		TraefikDiscovery:  NewDiscoveryManager(),
-		NginxDiscovery:    NewDiscoveryManager(),
-		NPMDiscovery:      NewDiscoveryManager(),
-		CaddyDiscovery:    NewDiscoveryManager(),
-		UnraidDiscovery:   NewDiscoveryManager(),
+		DockerDiscovery:     NewDiscoveryManager(),
+		TraefikDiscovery:    NewDiscoveryManager(),
+		NginxDiscovery:      NewDiscoveryManager(),
+		NPMDiscovery:        NewDiscoveryManager(),
+		CaddyDiscovery:      NewDiscoveryManager(),
+		UnraidDiscovery:     NewDiscoveryManager(),
 		HTTPClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},

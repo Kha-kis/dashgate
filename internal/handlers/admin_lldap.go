@@ -83,4 +83,3 @@ func AdminLLDAPGroupsHandler(app *server.App) http.HandlerFunc {
 		json.NewEncoder(w).Encode(groups)
 	}
 }
-

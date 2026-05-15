@@ -58,8 +58,8 @@ func GetAPIKeyUser(app *server.App, r *http.Request) *models.AuthenticatedUser {
 	defer rows.Close()
 
 	type matchedKey struct {
-		id        int
-		username  string
+		id         int
+		username   string
 		groupsJSON string
 	}
 	var matched *matchedKey

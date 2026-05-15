@@ -155,6 +155,7 @@ type SystemConfig struct {
 	LDAPSkipVerify   bool   `json:"ldapSkipVerify"`
 
 	// OIDC settings
+	OIDCDisplayName  string `json:"oidcDisplayName"`
 	OIDCIssuer       string `json:"oidcIssuer"`
 	OIDCClientID     string `json:"oidcClientID"`
 	OIDCClientSecret string `json:"-"`

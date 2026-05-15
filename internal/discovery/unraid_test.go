@@ -67,7 +67,7 @@ func queryUnraidContainersNoSSRF(client *http.Client, graphqlEndpoint, apiKey st
 		if len(container.Names) > 0 {
 			name = strings.TrimPrefix(container.Names[0], "/")
 			r := strings.NewReplacer("-", " ", "_", " ")
-		name = cases.Title(language.English).String(r.Replace(name))
+			name = cases.Title(language.English).String(r.Replace(name))
 		}
 
 		status := "offline"

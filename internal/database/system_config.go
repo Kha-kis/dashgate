@@ -113,6 +113,8 @@ func LoadSystemConfig(app *server.App) error {
 			app.SystemConfig.OIDCScopes = value
 		case "oidc_groups_claim":
 			app.SystemConfig.OIDCGroupsClaim = value
+		case "oidc_display_name":
+			app.SystemConfig.OIDCDisplayName = value
 
 		// Discovery settings
 		case "docker_discovery_enabled":
@@ -210,6 +212,7 @@ func SaveSystemConfig(app *server.App) error {
 		"oidc_redirect_url":  app.SystemConfig.OIDCRedirectURL,
 		"oidc_scopes":        app.SystemConfig.OIDCScopes,
 		"oidc_groups_claim":  app.SystemConfig.OIDCGroupsClaim,
+		"oidc_display_name":  app.SystemConfig.OIDCDisplayName,
 
 		// Discovery settings
 		"docker_discovery_enabled":  strconv.FormatBool(app.SystemConfig.DockerDiscoveryEnabled),

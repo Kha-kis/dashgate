@@ -150,11 +150,11 @@ func OIDCCallbackHandler(app *server.App) http.HandlerFunc {
 
 		// Extract claims
 		var claims struct {
-			Subject          string   `json:"sub"`
-			Email            string   `json:"email"`
-			Name             string   `json:"name"`
-			PreferredUsername string  `json:"preferred_username"`
-			Groups           []string `json:"groups"`
+			Subject           string   `json:"sub"`
+			Email             string   `json:"email"`
+			Name              string   `json:"name"`
+			PreferredUsername string   `json:"preferred_username"`
+			Groups            []string `json:"groups"`
 		}
 		if err := idToken.Claims(&claims); err != nil {
 			log.Printf("Failed to parse OIDC claims: %v", err)

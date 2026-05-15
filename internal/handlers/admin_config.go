@@ -56,6 +56,7 @@ func getSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.Requ
 		"ldapSkipVerify":  app.SystemConfig.LDAPSkipVerify,
 
 		// OIDC settings (excluding secret)
+		"oidcDisplayName": app.SystemConfig.OIDCDisplayName,
 		"oidcIssuer":      app.SystemConfig.OIDCIssuer,
 		"oidcClientID":    app.SystemConfig.OIDCClientID,
 		"oidcRedirectURL": app.SystemConfig.OIDCRedirectURL,
@@ -103,6 +104,7 @@ func updateSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.R
 		LDAPSkipVerify   bool   `json:"ldapSkipVerify"`
 
 		// OIDC settings
+		OIDCDisplayName  string `json:"oidcDisplayName"`
 		OIDCIssuer       string `json:"oidcIssuer"`
 		OIDCClientID     string `json:"oidcClientID"`
 		OIDCClientSecret string `json:"oidcClientSecret"`
@@ -164,6 +166,7 @@ func updateSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.R
 	app.SystemConfig.LDAPSkipVerify = req.LDAPSkipVerify
 
 	// Update OIDC settings
+	app.SystemConfig.OIDCDisplayName = req.OIDCDisplayName
 	app.SystemConfig.OIDCIssuer = req.OIDCIssuer
 	app.SystemConfig.OIDCClientID = req.OIDCClientID
 	if req.OIDCClientSecret != "" {

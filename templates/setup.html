@@ -1,821 +1,1113 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#000000">
-    <link rel="icon" type="image/x-icon" href="/static/branding/favicon.ico?v={{.Version}}">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/branding/favicon-32x32.png?v={{.Version}}">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/branding/favicon-16x16.png?v={{.Version}}">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/branding/apple-touch-icon.png?v={{.Version}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <link
+      rel="icon"
+      type="image/x-icon"
+      href="/static/branding/favicon.ico?v={{.Version}}"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/branding/favicon-32x32.png?v={{.Version}}"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/branding/favicon-16x16.png?v={{.Version}}"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/branding/apple-touch-icon.png?v={{.Version}}"
+    />
     <title>Setup - DashGate</title>
-    <link rel="stylesheet" href="/static/fonts/inter.css?v={{.Version}}">
-    <link rel="stylesheet" href="/static/css/base.css?v={{.Version}}">
+    <link rel="stylesheet" href="/static/fonts/inter.css?v={{.Version}}" />
+    <link rel="stylesheet" href="/static/css/base.css?v={{.Version}}" />
     <style>
-        body {
-            padding: 20px;
-        }
+      body {
+        padding: 20px;
+      }
 
-        .setup-container {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            max-width: 520px;
-        }
+      .setup-container {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 520px;
+      }
 
-        .setup-card {
-            background: var(--bg-secondary);
-            border-radius: 20px;
-            padding: 40px 32px;
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-            max-height: 90vh;
-            overflow-y: auto;
-        }
+      .setup-card {
+        background: var(--bg-secondary);
+        border-radius: 20px;
+        padding: 40px 32px;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        max-height: 90vh;
+        overflow-y: auto;
+      }
 
-        .setup-header {
-            text-align: center;
-            margin-bottom: 32px;
-        }
+      .setup-header {
+        text-align: center;
+        margin-bottom: 32px;
+      }
 
-        .setup-icon {
-            width: 72px;
-            height: 72px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
-        }
+      .setup-icon {
+        width: 72px;
+        height: 72px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+      }
 
-        .setup-icon svg {
-            width: 36px;
-            height: 36px;
-            color: white;
-        }
+      .setup-icon svg {
+        width: 36px;
+        height: 36px;
+        color: white;
+      }
 
-        .setup-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
+      .setup-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
 
-        .setup-subtitle {
-            font-size: 14px;
-            color: var(--text-tertiary);
-        }
+      .setup-subtitle {
+        font-size: 14px;
+        color: var(--text-tertiary);
+      }
 
-        .step-indicator {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 24px;
-        }
+      .step-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 24px;
+      }
 
-        .step-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--bg-elevated);
-            transition: background 0.3s, width 0.3s, border-radius 0.3s;
-        }
+      .step-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--bg-elevated);
+        transition:
+          background 0.3s,
+          width 0.3s,
+          border-radius 0.3s;
+      }
 
-        .step-dot.active {
-            background: var(--accent);
-            width: 24px;
-            border-radius: 4px;
-        }
+      .step-dot.active {
+        background: var(--accent);
+        width: 24px;
+        border-radius: 4px;
+      }
 
-        .step-dot.completed {
-            background: var(--green);
-        }
+      .step-dot.completed {
+        background: var(--green);
+      }
 
-        .setup-step {
-            display: none;
-        }
+      .setup-step {
+        display: none;
+      }
 
-        .setup-step.active {
-            display: block;
-        }
+      .setup-step.active {
+        display: block;
+      }
 
-        .step-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
+      .step-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
 
-        .step-desc {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-        }
+      .step-desc {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 24px;
+      }
 
-        .form-group {
-            margin-bottom: 16px;
-        }
+      .form-group {
+        margin-bottom: 16px;
+      }
 
-        .form-input {
-            padding: 12px 14px;
-            border-radius: 10px;
-            font-size: 14px;
-        }
+      .form-input {
+        padding: 12px 14px;
+        border-radius: 10px;
+        font-size: 14px;
+      }
 
-        .form-row {
-            display: flex;
-            gap: 12px;
-        }
+      .form-row {
+        display: flex;
+        gap: 12px;
+      }
 
-        .form-row .form-group {
-            flex: 1;
-        }
+      .form-row .form-group {
+        flex: 1;
+      }
 
-        .auth-options {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
+      .auth-options {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
 
-        .auth-option {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 16px;
-            background: var(--bg-tertiary);
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            cursor: pointer;
-            transition: border-color 0.2s, background 0.2s;
-        }
+      .auth-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+        background: var(--bg-tertiary);
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        cursor: pointer;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
+      }
 
-        .auth-option:hover {
-            border-color: var(--text-tertiary);
-        }
+      .auth-option:hover {
+        border-color: var(--text-tertiary);
+      }
 
-        .auth-option.selected {
-            border-color: var(--accent);
-            background: rgba(10, 132, 255, 0.1);
-        }
+      .auth-option.selected {
+        border-color: var(--accent);
+        background: rgba(10, 132, 255, 0.1);
+      }
 
-        .auth-option input {
-            display: none;
-        }
+      .auth-option input {
+        display: none;
+      }
 
-        .auth-option-checkbox {
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--text-tertiary);
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            margin-top: 2px;
-            transition: border-color 0.2s, background 0.2s;
-        }
+      .auth-option-checkbox {
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--text-tertiary);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: 2px;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
+      }
 
-        .auth-option.selected .auth-option-checkbox {
-            border-color: var(--accent);
-            background: var(--accent);
-        }
+      .auth-option.selected .auth-option-checkbox {
+        border-color: var(--accent);
+        background: var(--accent);
+      }
 
-        .auth-option.selected .auth-option-checkbox::after {
-            content: '';
-            width: 6px;
-            height: 10px;
-            border: solid white;
-            border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
-            margin-top: -2px;
-        }
+      .auth-option.selected .auth-option-checkbox::after {
+        content: "";
+        width: 6px;
+        height: 10px;
+        border: solid white;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+        margin-top: -2px;
+      }
 
-        .auth-option-content {
-            flex: 1;
-        }
+      .auth-option-content {
+        flex: 1;
+      }
 
-        .auth-option-title {
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
+      .auth-option-title {
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
 
-        .auth-option-desc {
-            font-size: 13px;
-            color: var(--text-tertiary);
-            line-height: 1.4;
-        }
+      .auth-option-desc {
+        font-size: 13px;
+        color: var(--text-tertiary);
+        line-height: 1.4;
+      }
 
-        .auth-option-badge {
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 500;
-            margin-left: 8px;
-        }
+      .auth-option-badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 500;
+        margin-left: 8px;
+      }
 
-        .badge-recommended {
-            background: rgba(48, 209, 88, 0.2);
-            color: var(--green);
-        }
+      .badge-recommended {
+        background: rgba(48, 209, 88, 0.2);
+        color: var(--green);
+      }
 
-        .btn-row {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
-        }
+      .btn-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+      }
 
-        .btn-row .btn {
-            flex: 1;
-        }
+      .btn-row .btn {
+        flex: 1;
+      }
 
-        .config-section {
-            background: var(--bg-tertiary);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
+      .config-section {
+        background: var(--bg-tertiary);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
 
-        .config-section-title {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+      .config-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
 
-        .config-section-title svg {
-            color: var(--accent);
-        }
+      .config-section-title svg {
+        color: var(--accent);
+      }
 
-        .help-text {
-            font-size: 12px;
-            color: var(--text-tertiary);
-            margin-top: 6px;
-        }
+      .help-text {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-top: 6px;
+      }
 
-        .toggle-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border);
-        }
+      .toggle-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+      }
 
-        .toggle-row:last-child {
-            border-bottom: none;
-        }
+      .toggle-row:last-child {
+        border-bottom: none;
+      }
 
-        .toggle-label {
-            font-size: 14px;
-        }
+      .toggle-label {
+        font-size: 14px;
+      }
 
-        .toggle-hint {
-            font-size: 12px;
-            color: var(--text-tertiary);
-            margin-top: 2px;
-        }
+      .toggle-hint {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="bg-gradient"></div>
 
     <div class="setup-container">
-        <div class="setup-card">
-            <div class="setup-header">
-                <div class="setup-icon">
-                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
-                </div>
-                <h1 class="setup-title">Welcome to DashGate</h1>
-                <p class="setup-subtitle">Let's get you set up in just a few steps</p>
-            </div>
-
-            <div class="step-indicator" id="stepIndicator">
-                <div class="step-dot active"></div>
-                <div class="step-dot"></div>
-            </div>
-
-            <div class="error-message" id="errorMessage"></div>
-
-            <!-- Step 1: Auth Providers -->
-            <div class="setup-step active" id="stepProviders">
-                <h2 class="step-title">Configure Authentication</h2>
-                <p class="step-desc">Select one or more authentication methods</p>
-
-                <div class="auth-options">
-                    <div class="auth-option" data-provider="proxy">
-                        <input type="checkbox" name="authProviders" value="proxy">
-                        <div class="auth-option-checkbox"></div>
-                        <div class="auth-option-content">
-                            <div class="auth-option-title">
-                                Reverse Proxy Auth
-                                <span class="auth-option-badge badge-recommended">Recommended</span>
-                            </div>
-                            <div class="auth-option-desc">
-                                Use headers from Authelia, Authentik, or another auth proxy.
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="auth-option" data-provider="local">
-                        <input type="checkbox" name="authProviders" value="local">
-                        <div class="auth-option-checkbox"></div>
-                        <div class="auth-option-content">
-                            <div class="auth-option-title">Local Users</div>
-                            <div class="auth-option-desc">
-                                Built-in login page with users stored in local database.
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="auth-option" data-provider="ldap">
-                        <input type="checkbox" name="authProviders" value="ldap">
-                        <div class="auth-option-checkbox"></div>
-                        <div class="auth-option-content">
-                            <div class="auth-option-title">LDAP / Active Directory</div>
-                            <div class="auth-option-desc">
-                                Authenticate against your LDAP or AD server.
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="auth-option" data-provider="oidc">
-                        <input type="checkbox" name="authProviders" value="oidc">
-                        <div class="auth-option-checkbox"></div>
-                        <div class="auth-option-content">
-                            <div class="auth-option-title">OIDC / OAuth2 SSO</div>
-                            <div class="auth-option-desc">
-                                Single sign-on with Keycloak, Okta, Azure AD, etc.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="btn-row">
-                    <button class="btn btn-primary" id="btnProvidersNext" disabled>
-                        <span class="btn-text">Continue</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Step: LDAP Configuration -->
-            <div class="setup-step" id="stepLdap">
-                <h2 class="step-title">Configure LDAP</h2>
-                <p class="step-desc">Enter your LDAP server details</p>
-
-                <div class="form-group">
-                    <label class="form-label" for="ldapServer">Server URL *</label>
-                    <input type="text" id="ldapServer" class="form-input" placeholder="ldap://localhost:389 or ldaps://ldap.example.com:636">
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label" for="ldapBindDN">Bind DN *</label>
-                        <input type="text" id="ldapBindDN" class="form-input" placeholder="cn=admin,dc=example,dc=com">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="ldapBindPassword">Bind Password *</label>
-                        <input type="password" id="ldapBindPassword" class="form-input" placeholder="Password">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="ldapBaseDN">Base DN *</label>
-                    <input type="text" id="ldapBaseDN" class="form-input" placeholder="dc=example,dc=com">
-                </div>
-
-                <div class="config-section">
-                    <div class="config-section-title">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-                        </svg>
-                        Advanced Settings
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="ldapUserFilter">User Filter</label>
-                            <input type="text" id="ldapUserFilter" class="form-input" placeholder="(uid=%s)" value="(uid=%s)">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="ldapUserAttr">Username Attr</label>
-                            <input type="text" id="ldapUserAttr" class="form-input" placeholder="uid" value="uid">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="ldapEmailAttr">Email Attr</label>
-                            <input type="text" id="ldapEmailAttr" class="form-input" placeholder="mail" value="mail">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="ldapDisplayAttr">Display Name Attr</label>
-                            <input type="text" id="ldapDisplayAttr" class="form-input" placeholder="cn" value="cn">
-                        </div>
-                    </div>
-
-                    <div class="toggle-row">
-                        <div>
-                            <div class="toggle-label">Use StartTLS</div>
-                            <div class="toggle-hint">Upgrade connection to TLS</div>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" id="ldapStartTLS">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-
-                    <div class="toggle-row">
-                        <div>
-                            <div class="toggle-label">Skip TLS Verify</div>
-                            <div class="toggle-hint">Allow self-signed certificates</div>
-                        </div>
-                        <label class="toggle">
-                            <input type="checkbox" id="ldapSkipVerify">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="btn-row">
-                    <button class="btn btn-secondary" onclick="goBack()">Back</button>
-                    <button class="btn btn-primary" onclick="nextStep()">
-                        <span class="btn-text">Continue</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Step: OIDC Configuration -->
-            <div class="setup-step" id="stepOidc">
-                <h2 class="step-title">Configure OIDC</h2>
-                <p class="step-desc">Enter your OIDC provider details</p>
-
-                <div class="form-group">
-                    <label class="form-label" for="oidcIssuer">Issuer URL *</label>
-                    <input type="url" id="oidcIssuer" class="form-input" placeholder="https://auth.example.com/realms/main">
-                    <p class="help-text">The OIDC provider's issuer URL</p>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label" for="oidcClientID">Client ID *</label>
-                        <input type="text" id="oidcClientID" class="form-input" placeholder="dashgate">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="oidcClientSecret">Client Secret *</label>
-                        <input type="password" id="oidcClientSecret" class="form-input" placeholder="Secret">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="oidcRedirectURL">Redirect URL *</label>
-                    <input type="url" id="oidcRedirectURL" class="form-input" placeholder="https://dashgate.example.com/auth/oidc/callback">
-                    <p class="help-text">Must be registered with your OIDC provider</p>
-                </div>
-
-                <div class="config-section">
-                    <div class="config-section-title">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-                        </svg>
-                        Advanced Settings
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="oidcScopes">Scopes</label>
-                            <input type="text" id="oidcScopes" class="form-input" placeholder="openid profile email groups" value="openid profile email groups">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="oidcGroupsClaim">Groups Claim</label>
-                            <input type="text" id="oidcGroupsClaim" class="form-input" placeholder="groups" value="groups">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="btn-row">
-                    <button class="btn btn-secondary" onclick="goBack()">Back</button>
-                    <button class="btn btn-primary" onclick="nextStep()">
-                        <span class="btn-text">Continue</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Step: Admin Account & Final Settings -->
-            <div class="setup-step" id="stepFinal">
-                <h2 class="step-title" id="finalTitle">Create Admin Account</h2>
-                <p class="step-desc" id="finalDesc">Set up your administrator account</p>
-
-                <div class="config-section" id="adminAccountSection">
-                    <div class="config-section-title">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
-                        Admin Credentials
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="adminUsername">Username *</label>
-                        <input type="text" id="adminUsername" class="form-input" placeholder="admin" autocomplete="off">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="adminPassword">Password *</label>
-                        <input type="password" id="adminPassword" class="form-input" placeholder="Choose a strong password" autocomplete="new-password">
-                        <p class="help-text">Minimum 4 characters</p>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="adminDisplayName">Display Name</label>
-                            <input type="text" id="adminDisplayName" class="form-input" placeholder="Administrator">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="adminEmail">Email</label>
-                            <input type="email" id="adminEmail" class="form-input" placeholder="admin@example.com">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="config-section" id="securitySection">
-                    <div class="config-section-title">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-                        </svg>
-                        Security Settings
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="adminGroup">Admin Group *</label>
-                        <input type="text" id="adminGroup" class="form-input" placeholder="admin" value="admin">
-                        <p class="help-text">Group name that grants admin access. Must match your auth provider's group name exactly.</p>
-                    </div>
-
-                    <div class="form-group" id="trustedProxiesGroup" style="display: none;">
-                        <label class="form-label" for="trustedProxies">Trusted Proxy IPs *</label>
-                        <input type="text" id="trustedProxies" class="form-input" placeholder="172.16.0.0/12, 10.0.0.0/8, 192.168.0.0/16" value="172.16.0.0/12, 10.0.0.0/8, 192.168.0.0/16">
-                        <p class="help-text">IPs/CIDRs allowed to send auth headers. Pre-filled with private network ranges (typical for Docker). Narrow this to your proxy's actual IP for better security.</p>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="sessionDays">Session Duration (days)</label>
-                        <input type="number" id="sessionDays" class="form-input" value="7" min="1" max="365">
-                        <p class="help-text">How long users stay logged in</p>
-                    </div>
-                </div>
-
-                <div class="btn-row">
-                    <button class="btn btn-secondary" onclick="goBack()">Back</button>
-                    <button class="btn btn-primary" id="completeSetup">
-                        <span class="btn-text">Complete Setup</span>
-                        <span class="spinner"></span>
-                    </button>
-                </div>
-            </div>
+      <div class="setup-card">
+        <div class="setup-header">
+          <div class="setup-icon">
+            <svg
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+          </div>
+          <h1 class="setup-title">Welcome to DashGate</h1>
+          <p class="setup-subtitle">Let's get you set up in just a few steps</p>
         </div>
+
+        <div class="step-indicator" id="stepIndicator">
+          <div class="step-dot active"></div>
+          <div class="step-dot"></div>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <!-- Step 1: Auth Providers -->
+        <div class="setup-step active" id="stepProviders">
+          <h2 class="step-title">Configure Authentication</h2>
+          <p class="step-desc">Select one or more authentication methods</p>
+
+          <div class="auth-options">
+            <div class="auth-option" data-provider="proxy">
+              <input type="checkbox" name="authProviders" value="proxy" />
+              <div class="auth-option-checkbox"></div>
+              <div class="auth-option-content">
+                <div class="auth-option-title">
+                  Reverse Proxy Auth
+                  <span class="auth-option-badge badge-recommended"
+                    >Recommended</span
+                  >
+                </div>
+                <div class="auth-option-desc">
+                  Use headers from Authelia, Authentik, or another auth proxy.
+                </div>
+              </div>
+            </div>
+
+            <div class="auth-option" data-provider="local">
+              <input type="checkbox" name="authProviders" value="local" />
+              <div class="auth-option-checkbox"></div>
+              <div class="auth-option-content">
+                <div class="auth-option-title">Local Users</div>
+                <div class="auth-option-desc">
+                  Built-in login page with users stored in local database.
+                </div>
+              </div>
+            </div>
+
+            <div class="auth-option" data-provider="ldap">
+              <input type="checkbox" name="authProviders" value="ldap" />
+              <div class="auth-option-checkbox"></div>
+              <div class="auth-option-content">
+                <div class="auth-option-title">LDAP / Active Directory</div>
+                <div class="auth-option-desc">
+                  Authenticate against your LDAP or AD server.
+                </div>
+              </div>
+            </div>
+
+            <div class="auth-option" data-provider="oidc">
+              <input type="checkbox" name="authProviders" value="oidc" />
+              <div class="auth-option-checkbox"></div>
+              <div class="auth-option-content">
+                <div class="auth-option-title">OIDC / OAuth2 SSO</div>
+                <div class="auth-option-desc">
+                  Single sign-on with Keycloak, Okta, Azure AD, etc.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btnProvidersNext" disabled>
+              <span class="btn-text">Continue</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step: LDAP Configuration -->
+        <div class="setup-step" id="stepLdap">
+          <h2 class="step-title">Configure LDAP</h2>
+          <p class="step-desc">Enter your LDAP server details</p>
+
+          <div class="form-group">
+            <label class="form-label" for="ldapServer">Server URL *</label>
+            <input
+              type="text"
+              id="ldapServer"
+              class="form-input"
+              placeholder="ldap://localhost:389 or ldaps://ldap.example.com:636"
+            />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="ldapBindDN">Bind DN *</label>
+              <input
+                type="text"
+                id="ldapBindDN"
+                class="form-input"
+                placeholder="cn=admin,dc=example,dc=com"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ldapBindPassword"
+                >Bind Password *</label
+              >
+              <input
+                type="password"
+                id="ldapBindPassword"
+                class="form-input"
+                placeholder="Password"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="ldapBaseDN">Base DN *</label>
+            <input
+              type="text"
+              id="ldapBaseDN"
+              class="form-input"
+              placeholder="dc=example,dc=com"
+            />
+          </div>
+
+          <div class="config-section">
+            <div class="config-section-title">
+              <svg
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
+                />
+              </svg>
+              Advanced Settings
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="ldapUserFilter"
+                  >User Filter</label
+                >
+                <input
+                  type="text"
+                  id="ldapUserFilter"
+                  class="form-input"
+                  placeholder="(uid=%s)"
+                  value="(uid=%s)"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="ldapUserAttr"
+                  >Username Attr</label
+                >
+                <input
+                  type="text"
+                  id="ldapUserAttr"
+                  class="form-input"
+                  placeholder="uid"
+                  value="uid"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="ldapEmailAttr">Email Attr</label>
+                <input
+                  type="text"
+                  id="ldapEmailAttr"
+                  class="form-input"
+                  placeholder="mail"
+                  value="mail"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="ldapDisplayAttr"
+                  >Display Name Attr</label
+                >
+                <input
+                  type="text"
+                  id="ldapDisplayAttr"
+                  class="form-input"
+                  placeholder="cn"
+                  value="cn"
+                />
+              </div>
+            </div>
+
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Use StartTLS</div>
+                <div class="toggle-hint">Upgrade connection to TLS</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="ldapStartTLS" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Skip TLS Verify</div>
+                <div class="toggle-hint">Allow self-signed certificates</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="ldapSkipVerify" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-secondary" onclick="goBack()">Back</button>
+            <button class="btn btn-primary" onclick="nextStep()">
+              <span class="btn-text">Continue</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step: OIDC Configuration -->
+        <div class="setup-step" id="stepOidc">
+          <h2 class="step-title">Configure OIDC</h2>
+          <p class="step-desc">Enter your OIDC provider details</p>
+
+          <div class="form-group">
+            <label class="form-label" for="oidcDisplayName"
+              >Display Name (optional)</label
+            >
+            <input
+              type="text"
+              id="oidcDisplayName"
+              class="form-input"
+              placeholder="e.g. Company SSO, B-Auth"
+            />
+            <p class="help-text">
+              Custom label for the login button. Defaults to "SSO".
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="oidcIssuer">Issuer URL *</label>
+            <input
+              type="url"
+              id="oidcIssuer"
+              class="form-input"
+              placeholder="https://auth.example.com/realms/main"
+            />
+            <p class="help-text">The OIDC provider's issuer URL</p>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="oidcClientID">Client ID *</label>
+              <input
+                type="text"
+                id="oidcClientID"
+                class="form-input"
+                placeholder="dashgate"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="oidcClientSecret"
+                >Client Secret *</label
+              >
+              <input
+                type="password"
+                id="oidcClientSecret"
+                class="form-input"
+                placeholder="Secret"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="oidcRedirectURL"
+              >Redirect URL *</label
+            >
+            <input
+              type="url"
+              id="oidcRedirectURL"
+              class="form-input"
+              placeholder="https://dashgate.example.com/auth/oidc/callback"
+            />
+            <p class="help-text">Must be registered with your OIDC provider</p>
+          </div>
+
+          <div class="config-section">
+            <div class="config-section-title">
+              <svg
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
+                />
+              </svg>
+              Advanced Settings
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="oidcScopes">Scopes</label>
+                <input
+                  type="text"
+                  id="oidcScopes"
+                  class="form-input"
+                  placeholder="openid profile email groups"
+                  value="openid profile email groups"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="oidcGroupsClaim"
+                  >Groups Claim</label
+                >
+                <input
+                  type="text"
+                  id="oidcGroupsClaim"
+                  class="form-input"
+                  placeholder="groups"
+                  value="groups"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-secondary" onclick="goBack()">Back</button>
+            <button class="btn btn-primary" onclick="nextStep()">
+              <span class="btn-text">Continue</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step: Admin Account & Final Settings -->
+        <div class="setup-step" id="stepFinal">
+          <h2 class="step-title" id="finalTitle">Create Admin Account</h2>
+          <p class="step-desc" id="finalDesc">
+            Set up your administrator account
+          </p>
+
+          <div class="config-section" id="adminAccountSection">
+            <div class="config-section-title">
+              <svg
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              Admin Credentials
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="adminUsername">Username *</label>
+              <input
+                type="text"
+                id="adminUsername"
+                class="form-input"
+                placeholder="admin"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="adminPassword">Password *</label>
+              <input
+                type="password"
+                id="adminPassword"
+                class="form-input"
+                placeholder="Choose a strong password"
+                autocomplete="new-password"
+              />
+              <p class="help-text">Minimum 4 characters</p>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="adminDisplayName"
+                  >Display Name</label
+                >
+                <input
+                  type="text"
+                  id="adminDisplayName"
+                  class="form-input"
+                  placeholder="Administrator"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="adminEmail">Email</label>
+                <input
+                  type="email"
+                  id="adminEmail"
+                  class="form-input"
+                  placeholder="admin@example.com"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="config-section" id="securitySection">
+            <div class="config-section-title">
+              <svg
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0110 0v4" />
+              </svg>
+              Security Settings
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="adminGroup">Admin Group *</label>
+              <input
+                type="text"
+                id="adminGroup"
+                class="form-input"
+                placeholder="admin"
+                value="admin"
+              />
+              <p class="help-text">
+                Group name that grants admin access. Must match your auth
+                provider's group name exactly.
+              </p>
+            </div>
+
+            <div
+              class="form-group"
+              id="trustedProxiesGroup"
+              style="display: none"
+            >
+              <label class="form-label" for="trustedProxies"
+                >Trusted Proxy IPs *</label
+              >
+              <input
+                type="text"
+                id="trustedProxies"
+                class="form-input"
+                placeholder="172.16.0.0/12, 10.0.0.0/8, 192.168.0.0/16"
+                value="172.16.0.0/12, 10.0.0.0/8, 192.168.0.0/16"
+              />
+              <p class="help-text">
+                IPs/CIDRs allowed to send auth headers. Pre-filled with private
+                network ranges (typical for Docker). Narrow this to your proxy's
+                actual IP for better security.
+              </p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="sessionDays"
+                >Session Duration (days)</label
+              >
+              <input
+                type="number"
+                id="sessionDays"
+                class="form-input"
+                value="7"
+                min="1"
+                max="365"
+              />
+              <p class="help-text">How long users stay logged in</p>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-secondary" onclick="goBack()">Back</button>
+            <button class="btn btn-primary" id="completeSetup">
+              <span class="btn-text">Complete Setup</span>
+              <span class="spinner"></span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script nonce="{{.CSPNonce}}">
-        // CSRF helper: read the dashgate_csrf cookie for the double-submit pattern
-        function getCSRFToken() {
-            const match = document.cookie.match(/(?:^|;\s*)dashgate_csrf=([^;]*)/);
-            return match ? decodeURIComponent(match[1]) : '';
+      // CSRF helper: read the dashgate_csrf cookie for the double-submit pattern
+      function getCSRFToken() {
+        const match = document.cookie.match(/(?:^|;\s*)dashgate_csrf=([^;]*)/);
+        return match ? decodeURIComponent(match[1]) : "";
+      }
+
+      // Setup state
+      const state = {
+        selectedProviders: [],
+        steps: ["providers", "final"],
+        currentStepIndex: 0,
+      };
+
+      // Provider checkbox handling
+      document.querySelectorAll(".auth-option").forEach((option) => {
+        option.addEventListener("click", () => {
+          const checkbox = option.querySelector("input");
+          checkbox.checked = !checkbox.checked;
+          option.classList.toggle("selected", checkbox.checked);
+
+          // Update selected providers
+          state.selectedProviders = Array.from(
+            document.querySelectorAll('input[name="authProviders"]:checked'),
+          ).map((cb) => cb.value);
+
+          document.getElementById("btnProvidersNext").disabled =
+            state.selectedProviders.length === 0;
+        });
+      });
+
+      // Build dynamic step order based on selected providers
+      function buildStepOrder() {
+        state.steps = ["providers"];
+
+        if (state.selectedProviders.includes("ldap")) {
+          state.steps.push("ldap");
+        }
+        if (state.selectedProviders.includes("oidc")) {
+          state.steps.push("oidc");
         }
 
-        // Setup state
-        const state = {
-            selectedProviders: [],
-            steps: ['providers', 'final'],
-            currentStepIndex: 0
-        };
+        state.steps.push("final");
+        updateStepIndicator();
+      }
 
-        // Provider checkbox handling
-        document.querySelectorAll('.auth-option').forEach(option => {
-            option.addEventListener('click', () => {
-                const checkbox = option.querySelector('input');
-                checkbox.checked = !checkbox.checked;
-                option.classList.toggle('selected', checkbox.checked);
+      // Update step indicator dots
+      function updateStepIndicator() {
+        const container = document.getElementById("stepIndicator");
+        container.innerHTML = state.steps
+          .map((_, i) => {
+            let classes = "step-dot";
+            if (i < state.currentStepIndex) classes += " completed";
+            if (i === state.currentStepIndex) classes += " active";
+            return `<div class="${classes}"></div>`;
+          })
+          .join("");
+      }
 
-                // Update selected providers
-                state.selectedProviders = Array.from(document.querySelectorAll('input[name="authProviders"]:checked'))
-                    .map(cb => cb.value);
+      // Show a specific step
+      function showStep(stepName) {
+        document
+          .querySelectorAll(".setup-step")
+          .forEach((el) => el.classList.remove("active"));
+        document
+          .getElementById(
+            "step" + stepName.charAt(0).toUpperCase() + stepName.slice(1),
+          )
+          .classList.add("active");
+        hideError();
 
-                document.getElementById('btnProvidersNext').disabled = state.selectedProviders.length === 0;
+        // Update final step title based on providers
+        if (stepName === "final") {
+          const needsAdmin = state.selectedProviders.includes("local");
+          if (needsAdmin) {
+            document.getElementById("finalTitle").textContent =
+              "Create Admin Account";
+            document.getElementById("finalDesc").textContent =
+              "Set up your administrator account and security settings";
+            document.getElementById("adminAccountSection").style.display =
+              "block";
+          } else {
+            document.getElementById("finalTitle").textContent =
+              "Security & Session Settings";
+            document.getElementById("finalDesc").textContent =
+              "Configure security and session behavior";
+            document.getElementById("adminAccountSection").style.display =
+              "none";
+          }
+          // Show trusted proxies field only when proxy auth is selected
+          const hasProxy = state.selectedProviders.includes("proxy");
+          document.getElementById("trustedProxiesGroup").style.display =
+            hasProxy ? "block" : "none";
+        }
+      }
+
+      // Navigate to next step
+      function nextStep() {
+        // Validate current step
+        const currentStep = state.steps[state.currentStepIndex];
+
+        if (currentStep === "ldap") {
+          const server = document.getElementById("ldapServer").value.trim();
+          const bindDN = document.getElementById("ldapBindDN").value.trim();
+          const bindPW = document.getElementById("ldapBindPassword").value;
+          const baseDN = document.getElementById("ldapBaseDN").value.trim();
+
+          if (!server || !bindDN || !bindPW || !baseDN) {
+            showError("Please fill in all required LDAP fields");
+            return;
+          }
+        }
+
+        if (currentStep === "oidc") {
+          const issuer = document.getElementById("oidcIssuer").value.trim();
+          const clientID = document.getElementById("oidcClientID").value.trim();
+          const clientSecret =
+            document.getElementById("oidcClientSecret").value;
+          const redirectURL = document
+            .getElementById("oidcRedirectURL")
+            .value.trim();
+
+          if (!issuer || !clientID || !clientSecret || !redirectURL) {
+            showError("Please fill in all required OIDC fields");
+            return;
+          }
+        }
+
+        state.currentStepIndex++;
+        updateStepIndicator();
+        showStep(state.steps[state.currentStepIndex]);
+      }
+
+      // Navigate back
+      function goBack() {
+        state.currentStepIndex--;
+        updateStepIndicator();
+        showStep(state.steps[state.currentStepIndex]);
+      }
+
+      // First step next button
+      document
+        .getElementById("btnProvidersNext")
+        .addEventListener("click", () => {
+          if (state.selectedProviders.length === 0) return;
+          buildStepOrder();
+          state.currentStepIndex = 1;
+          updateStepIndicator();
+          showStep(state.steps[1]);
+        });
+
+      // Complete setup
+      document
+        .getElementById("completeSetup")
+        .addEventListener("click", async () => {
+          const btn = document.getElementById("completeSetup");
+          btn.classList.add("loading");
+          btn.disabled = true;
+          hideError();
+
+          const payload = {
+            proxyAuthEnabled: state.selectedProviders.includes("proxy"),
+            localAuthEnabled: state.selectedProviders.includes("local"),
+            ldapAuthEnabled: state.selectedProviders.includes("ldap"),
+            oidcAuthEnabled: state.selectedProviders.includes("oidc"),
+            sessionDays:
+              parseInt(document.getElementById("sessionDays").value) || 7,
+            adminGroup:
+              document.getElementById("adminGroup").value.trim() || "admin",
+            trustedProxies: document
+              .getElementById("trustedProxies")
+              .value.trim(),
+          };
+
+          // Add admin credentials if local auth is enabled
+          if (state.selectedProviders.includes("local")) {
+            const username = document
+              .getElementById("adminUsername")
+              .value.trim();
+            const password = document.getElementById("adminPassword").value;
+
+            if (!username || !password) {
+              showError("Username and password are required for local auth");
+              btn.classList.remove("loading");
+              btn.disabled = false;
+              return;
+            }
+
+            if (password.length < 8) {
+              showError("Password must be at least 8 characters");
+              btn.classList.remove("loading");
+              btn.disabled = false;
+              return;
+            }
+
+            payload.username = username;
+            payload.password = password;
+            payload.displayName = document
+              .getElementById("adminDisplayName")
+              .value.trim();
+            payload.email = document.getElementById("adminEmail").value.trim();
+          }
+
+          // Add LDAP config if enabled
+          if (state.selectedProviders.includes("ldap")) {
+            payload.ldapServer = document
+              .getElementById("ldapServer")
+              .value.trim();
+            payload.ldapBindDN = document
+              .getElementById("ldapBindDN")
+              .value.trim();
+            payload.ldapBindPassword =
+              document.getElementById("ldapBindPassword").value;
+            payload.ldapBaseDN = document
+              .getElementById("ldapBaseDN")
+              .value.trim();
+            payload.ldapUserFilter =
+              document.getElementById("ldapUserFilter").value.trim() ||
+              "(uid=%s)";
+            payload.ldapUserAttr =
+              document.getElementById("ldapUserAttr").value.trim() || "uid";
+            payload.ldapEmailAttr =
+              document.getElementById("ldapEmailAttr").value.trim() || "mail";
+            payload.ldapDisplayAttr =
+              document.getElementById("ldapDisplayAttr").value.trim() || "cn";
+            payload.ldapStartTLS =
+              document.getElementById("ldapStartTLS").checked;
+            payload.ldapSkipVerify =
+              document.getElementById("ldapSkipVerify").checked;
+          }
+
+          // Add OIDC config if enabled
+          if (state.selectedProviders.includes("oidc")) {
+            payload.oidcDisplayName = document
+              .getElementById("oidcDisplayName")
+              .value.trim();
+            payload.oidcIssuer = document
+              .getElementById("oidcIssuer")
+              .value.trim();
+            payload.oidcClientID = document
+              .getElementById("oidcClientID")
+              .value.trim();
+            payload.oidcClientSecret =
+              document.getElementById("oidcClientSecret").value;
+            payload.oidcRedirectURL = document
+              .getElementById("oidcRedirectURL")
+              .value.trim();
+            payload.oidcScopes =
+              document.getElementById("oidcScopes").value.trim() ||
+              "openid profile email groups";
+            payload.oidcGroupsClaim =
+              document.getElementById("oidcGroupsClaim").value.trim() ||
+              "groups";
+          }
+
+          try {
+            const resp = await fetch("/setup", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": getCSRFToken(),
+              },
+              credentials: "include",
+              body: JSON.stringify(payload),
             });
+
+            if (resp.ok) {
+              const data = await resp.json();
+              // Validate redirect is a safe relative URL
+              let redirect = data.redirect || "/";
+              if (!redirect.startsWith("/") || redirect.startsWith("//")) {
+                redirect = "/";
+              }
+              window.location.href = redirect;
+            } else {
+              const text = await resp.text();
+              showError(text || "Setup failed");
+            }
+          } catch (err) {
+            showError("Connection error");
+          } finally {
+            btn.classList.remove("loading");
+            btn.disabled = false;
+          }
         });
 
-        // Build dynamic step order based on selected providers
-        function buildStepOrder() {
-            state.steps = ['providers'];
+      function showError(msg) {
+        const el = document.getElementById("errorMessage");
+        el.textContent = msg;
+        el.classList.add("show");
+      }
 
-            if (state.selectedProviders.includes('ldap')) {
-                state.steps.push('ldap');
-            }
-            if (state.selectedProviders.includes('oidc')) {
-                state.steps.push('oidc');
-            }
-
-            state.steps.push('final');
-            updateStepIndicator();
-        }
-
-        // Update step indicator dots
-        function updateStepIndicator() {
-            const container = document.getElementById('stepIndicator');
-            container.innerHTML = state.steps.map((_, i) => {
-                let classes = 'step-dot';
-                if (i < state.currentStepIndex) classes += ' completed';
-                if (i === state.currentStepIndex) classes += ' active';
-                return `<div class="${classes}"></div>`;
-            }).join('');
-        }
-
-        // Show a specific step
-        function showStep(stepName) {
-            document.querySelectorAll('.setup-step').forEach(el => el.classList.remove('active'));
-            document.getElementById('step' + stepName.charAt(0).toUpperCase() + stepName.slice(1)).classList.add('active');
-            hideError();
-
-            // Update final step title based on providers
-            if (stepName === 'final') {
-                const needsAdmin = state.selectedProviders.includes('local');
-                if (needsAdmin) {
-                    document.getElementById('finalTitle').textContent = 'Create Admin Account';
-                    document.getElementById('finalDesc').textContent = 'Set up your administrator account and security settings';
-                    document.getElementById('adminAccountSection').style.display = 'block';
-                } else {
-                    document.getElementById('finalTitle').textContent = 'Security & Session Settings';
-                    document.getElementById('finalDesc').textContent = 'Configure security and session behavior';
-                    document.getElementById('adminAccountSection').style.display = 'none';
-                }
-                // Show trusted proxies field only when proxy auth is selected
-                const hasProxy = state.selectedProviders.includes('proxy');
-                document.getElementById('trustedProxiesGroup').style.display = hasProxy ? 'block' : 'none';
-            }
-        }
-
-        // Navigate to next step
-        function nextStep() {
-            // Validate current step
-            const currentStep = state.steps[state.currentStepIndex];
-
-            if (currentStep === 'ldap') {
-                const server = document.getElementById('ldapServer').value.trim();
-                const bindDN = document.getElementById('ldapBindDN').value.trim();
-                const bindPW = document.getElementById('ldapBindPassword').value;
-                const baseDN = document.getElementById('ldapBaseDN').value.trim();
-
-                if (!server || !bindDN || !bindPW || !baseDN) {
-                    showError('Please fill in all required LDAP fields');
-                    return;
-                }
-            }
-
-            if (currentStep === 'oidc') {
-                const issuer = document.getElementById('oidcIssuer').value.trim();
-                const clientID = document.getElementById('oidcClientID').value.trim();
-                const clientSecret = document.getElementById('oidcClientSecret').value;
-                const redirectURL = document.getElementById('oidcRedirectURL').value.trim();
-
-                if (!issuer || !clientID || !clientSecret || !redirectURL) {
-                    showError('Please fill in all required OIDC fields');
-                    return;
-                }
-            }
-
-            state.currentStepIndex++;
-            updateStepIndicator();
-            showStep(state.steps[state.currentStepIndex]);
-        }
-
-        // Navigate back
-        function goBack() {
-            state.currentStepIndex--;
-            updateStepIndicator();
-            showStep(state.steps[state.currentStepIndex]);
-        }
-
-        // First step next button
-        document.getElementById('btnProvidersNext').addEventListener('click', () => {
-            if (state.selectedProviders.length === 0) return;
-            buildStepOrder();
-            state.currentStepIndex = 1;
-            updateStepIndicator();
-            showStep(state.steps[1]);
-        });
-
-        // Complete setup
-        document.getElementById('completeSetup').addEventListener('click', async () => {
-            const btn = document.getElementById('completeSetup');
-            btn.classList.add('loading');
-            btn.disabled = true;
-            hideError();
-
-            const payload = {
-                proxyAuthEnabled: state.selectedProviders.includes('proxy'),
-                localAuthEnabled: state.selectedProviders.includes('local'),
-                ldapAuthEnabled: state.selectedProviders.includes('ldap'),
-                oidcAuthEnabled: state.selectedProviders.includes('oidc'),
-                sessionDays: parseInt(document.getElementById('sessionDays').value) || 7,
-                adminGroup: document.getElementById('adminGroup').value.trim() || 'admin',
-                trustedProxies: document.getElementById('trustedProxies').value.trim()
-            };
-
-            // Add admin credentials if local auth is enabled
-            if (state.selectedProviders.includes('local')) {
-                const username = document.getElementById('adminUsername').value.trim();
-                const password = document.getElementById('adminPassword').value;
-
-                if (!username || !password) {
-                    showError('Username and password are required for local auth');
-                    btn.classList.remove('loading');
-                    btn.disabled = false;
-                    return;
-                }
-
-                if (password.length < 8) {
-                    showError('Password must be at least 8 characters');
-                    btn.classList.remove('loading');
-                    btn.disabled = false;
-                    return;
-                }
-
-                payload.username = username;
-                payload.password = password;
-                payload.displayName = document.getElementById('adminDisplayName').value.trim();
-                payload.email = document.getElementById('adminEmail').value.trim();
-            }
-
-            // Add LDAP config if enabled
-            if (state.selectedProviders.includes('ldap')) {
-                payload.ldapServer = document.getElementById('ldapServer').value.trim();
-                payload.ldapBindDN = document.getElementById('ldapBindDN').value.trim();
-                payload.ldapBindPassword = document.getElementById('ldapBindPassword').value;
-                payload.ldapBaseDN = document.getElementById('ldapBaseDN').value.trim();
-                payload.ldapUserFilter = document.getElementById('ldapUserFilter').value.trim() || '(uid=%s)';
-                payload.ldapUserAttr = document.getElementById('ldapUserAttr').value.trim() || 'uid';
-                payload.ldapEmailAttr = document.getElementById('ldapEmailAttr').value.trim() || 'mail';
-                payload.ldapDisplayAttr = document.getElementById('ldapDisplayAttr').value.trim() || 'cn';
-                payload.ldapStartTLS = document.getElementById('ldapStartTLS').checked;
-                payload.ldapSkipVerify = document.getElementById('ldapSkipVerify').checked;
-            }
-
-            // Add OIDC config if enabled
-            if (state.selectedProviders.includes('oidc')) {
-                payload.oidcIssuer = document.getElementById('oidcIssuer').value.trim();
-                payload.oidcClientID = document.getElementById('oidcClientID').value.trim();
-                payload.oidcClientSecret = document.getElementById('oidcClientSecret').value;
-                payload.oidcRedirectURL = document.getElementById('oidcRedirectURL').value.trim();
-                payload.oidcScopes = document.getElementById('oidcScopes').value.trim() || 'openid profile email groups';
-                payload.oidcGroupsClaim = document.getElementById('oidcGroupsClaim').value.trim() || 'groups';
-            }
-
-            try {
-                const resp = await fetch('/setup', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': getCSRFToken()
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify(payload)
-                });
-
-                if (resp.ok) {
-                    const data = await resp.json();
-                    // Validate redirect is a safe relative URL
-                    let redirect = data.redirect || '/';
-                    if (!redirect.startsWith('/') || redirect.startsWith('//')) {
-                        redirect = '/';
-                    }
-                    window.location.href = redirect;
-                } else {
-                    const text = await resp.text();
-                    showError(text || 'Setup failed');
-                }
-            } catch (err) {
-                showError('Connection error');
-            } finally {
-                btn.classList.remove('loading');
-                btn.disabled = false;
-            }
-        });
-
-        function showError(msg) {
-            const el = document.getElementById('errorMessage');
-            el.textContent = msg;
-            el.classList.add('show');
-        }
-
-        function hideError() {
-            document.getElementById('errorMessage').classList.remove('show');
-        }
+      function hideError() {
+        document.getElementById("errorMessage").classList.remove("show");
+      }
     </script>
-</body>
+  </body>
 </html>

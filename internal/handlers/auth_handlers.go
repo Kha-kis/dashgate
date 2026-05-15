@@ -37,10 +37,11 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 			// Pass auth options to template
 			app.SysConfigMu.RLock()
 			data := map[string]interface{}{
-				"OIDCEnabled": app.SystemConfig.OIDCAuthEnabled && app.OIDCProvider != nil,
-				"LDAPEnabled": app.SystemConfig.LDAPAuthEnabled && app.LDAPAuth != nil,
-				"CSPNonce":    middleware.GetCSPNonce(r),
-				"Version":     app.Version,
+				"OIDCEnabled":     app.SystemConfig.OIDCAuthEnabled && app.OIDCProvider != nil,
+				"LDAPEnabled":     app.SystemConfig.LDAPAuthEnabled && app.LDAPAuth != nil,
+				"OIDCDisplayName": app.SystemConfig.OIDCDisplayName,
+				"CSPNonce":        middleware.GetCSPNonce(r),
+				"Version":         app.Version,
 			}
 			app.SysConfigMu.RUnlock()
 
@@ -263,10 +264,11 @@ func AuthConfigHandler(app *server.App) http.HandlerFunc {
 
 		app.SysConfigMu.RLock()
 		cfg := map[string]interface{}{
-			"localEnabled": app.SystemConfig.LocalAuthEnabled,
-			"ldapEnabled":  app.SystemConfig.LDAPAuthEnabled,
-			"oidcEnabled":  app.SystemConfig.OIDCAuthEnabled,
-			"proxyEnabled": app.SystemConfig.ProxyAuthEnabled,
+			"localEnabled":    app.SystemConfig.LocalAuthEnabled,
+			"ldapEnabled":     app.SystemConfig.LDAPAuthEnabled,
+			"oidcEnabled":     app.SystemConfig.OIDCAuthEnabled,
+			"proxyEnabled":    app.SystemConfig.ProxyAuthEnabled,
+			"oidcDisplayName": app.SystemConfig.OIDCDisplayName,
 		}
 		app.SysConfigMu.RUnlock()
 
