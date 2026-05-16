@@ -130,3 +130,10 @@ func UserFromContext(ctx context.Context) *models.AuthenticatedUser {
 	}
 	return nil
 }
+
+// WithUser sets the authenticated user on the request context and returns a
+// shallow copy of the request with the updated context. Exported for tests.
+func WithUser(r *http.Request, user *models.AuthenticatedUser) *http.Request {
+	ctx := context.WithValue(r.Context(), userContextKey, user)
+	return r.WithContext(ctx)
+}
