@@ -73,47 +73,50 @@ func ImportApplyHandler(app *server.App) http.HandlerFunc {
 			return
 		}
 
-		app.ConfigMu.Lock()
-		defer app.ConfigMu.Unlock()
-
-		categoryIndex := make(map[string]int)
-		for i, cat := range app.Config.Categories {
-			categoryIndex[strings.ToLower(cat.Name)] = i
-		}
-
 		imported := 0
-		for _, a := range req.Apps {
-			if a.Name == "" || a.URL == "" {
-				continue
+
+		func() {
+			app.ConfigMu.Lock()
+			defer app.ConfigMu.Unlock()
+
+			categoryIndex := make(map[string]int)
+			for i, cat := range app.Config.Categories {
+				categoryIndex[strings.ToLower(cat.Name)] = i
 			}
 
-			catName := a.Category
-			if mapped, ok := req.Categories[a.Category]; ok && mapped != "" {
-				catName = mapped
-			}
-			if catName == "" {
-				catName = "Imported"
-			}
+			for _, a := range req.Apps {
+				if a.Name == "" || a.URL == "" {
+					continue
+				}
 
-			idx, ok := categoryIndex[strings.ToLower(catName)]
-			if !ok {
-				app.Config.Categories = append(app.Config.Categories, models.Category{
-					Name: catName,
-					Apps: []models.App{},
-				})
-				idx = len(app.Config.Categories) - 1
-				categoryIndex[strings.ToLower(catName)] = idx
-			}
+				catName := a.Category
+				if mapped, ok := req.Categories[a.Category]; ok && mapped != "" {
+					catName = mapped
+				}
+				if catName == "" {
+					catName = "Imported"
+				}
 
-			newApp := models.App{
-				Name:        a.Name,
-				URL:         a.URL,
-				Icon:        a.Icon,
-				Description: a.Description,
+				idx, ok := categoryIndex[strings.ToLower(catName)]
+				if !ok {
+					app.Config.Categories = append(app.Config.Categories, models.Category{
+						Name: catName,
+						Apps: []models.App{},
+					})
+					idx = len(app.Config.Categories) - 1
+					categoryIndex[strings.ToLower(catName)] = idx
+				}
+
+				newApp := models.App{
+					Name:        a.Name,
+					URL:         a.URL,
+					Icon:        a.Icon,
+					Description: a.Description,
+				}
+				app.Config.Categories[idx].Apps = append(app.Config.Categories[idx].Apps, newApp)
+				imported++
 			}
-			app.Config.Categories[idx].Apps = append(app.Config.Categories[idx].Apps, newApp)
-			imported++
-		}
+		}()
 
 		if err := config.SaveConfig(app); err != nil {
 			log.Printf("Error saving imported config: %v", err)
