@@ -739,14 +739,19 @@ async function previewImport(input) {
     preview.style.display = "block";
 
     list.innerHTML = importPreviewApps
-      .map(
-        (a, i) =>
-          `<div style="padding: 6px 8px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-light)">
+      .map((a, i) => {
+        const isHttp =
+          a.url &&
+          (a.url.startsWith("http://") || a.url.startsWith("https://"));
+        const link = isHttp
+          ? `<a href="${escapeHtml(a.url)}" target="_blank" style="color: var(--blue); font-size: 13px">↗</a>`
+          : `<span style="color: var(--text-tertiary); font-size: 13px" title="${escapeHtml(a.url)}">↗</span>`;
+        return `<div style="padding: 6px 8px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-light)">
             <span style="flex: 1; font-weight: 500">${escapeHtml(a.name)}</span>
             <span style="color: var(--text-tertiary); font-size: 13px">${escapeHtml(a.category)}</span>
-            <a href="${escapeHtml(a.url)}" target="_blank" style="color: var(--blue); font-size: 13px">↗</a>
-          </div>`,
-      )
+            ${link}
+          </div>`;
+      })
       .join("");
 
     if (result.warnings && result.warnings.length) {
