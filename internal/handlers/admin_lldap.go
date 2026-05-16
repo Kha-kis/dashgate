@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
@@ -31,8 +30,7 @@ func AdminCheckHandler(app *server.App) http.HandlerFunc {
 		}
 		app.SysConfigMu.RUnlock()
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		respondJSON(w, http.StatusOK, response)
 	}
 }
 
@@ -40,23 +38,22 @@ func AdminCheckHandler(app *server.App) http.HandlerFunc {
 func AdminLLDAPUsersHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if app.LLDAPConfig == nil {
-			http.Error(w, "LLDAP not configured", http.StatusServiceUnavailable)
+			respondError(w, http.StatusServiceUnavailable, "LLDAP not configured")
 			return
 		}
 
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		users, err := lldap.ListUsers(app)
 		if err != nil {
 			log.Printf("LLDAP operation failed: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(users)
+		respondJSON(w, http.StatusOK, users)
 	}
 }
 
@@ -64,22 +61,21 @@ func AdminLLDAPUsersHandler(app *server.App) http.HandlerFunc {
 func AdminLLDAPGroupsHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if app.LLDAPConfig == nil {
-			http.Error(w, "LLDAP not configured", http.StatusServiceUnavailable)
+			respondError(w, http.StatusServiceUnavailable, "LLDAP not configured")
 			return
 		}
 
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		groups, err := lldap.ListGroups(app)
 		if err != nil {
 			log.Printf("LLDAP operation failed: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(groups)
+		respondJSON(w, http.StatusOK, groups)
 	}
 }

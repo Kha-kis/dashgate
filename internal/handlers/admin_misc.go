@@ -18,7 +18,7 @@ import (
 func AdminAppsHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -45,8 +45,7 @@ func AdminAppsHandler(app *server.App) http.HandlerFunc {
 		}
 		app.ConfigMu.RUnlock()
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(apps)
+		respondJSON(w, http.StatusOK, apps)
 	}
 }
 
@@ -54,7 +53,7 @@ func AdminAppsHandler(app *server.App) http.HandlerFunc {
 func AdminAppMappingHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -64,12 +63,12 @@ func AdminAppMappingHandler(app *server.App) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		if req.AppURL == "" {
-			http.Error(w, "App URL required", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "App URL required")
 			return
 		}
 
@@ -87,7 +86,7 @@ func AdminAppMappingHandler(app *server.App) http.HandlerFunc {
 		app.ConfigMu.RUnlock()
 
 		if !found {
-			http.Error(w, "App not found", http.StatusNotFound)
+			respondError(w, http.StatusNotFound, "App not found")
 			return
 		}
 
@@ -103,12 +102,11 @@ func AdminAppMappingHandler(app *server.App) http.HandlerFunc {
 		// Save to file
 		if err := config.SaveAppMappings(app); err != nil {
 			log.Printf("Error saving app mappings: %v", err)
-			http.Error(w, "Failed to save mappings", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to save mappings")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+		respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 	}
 }
 
@@ -116,7 +114,7 @@ func AdminAppMappingHandler(app *server.App) http.HandlerFunc {
 func BackupHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -126,9 +124,9 @@ func BackupHandler(app *server.App) http.HandlerFunc {
 		}
 
 		// Export users (without password hashes for security)
-		rows, err := app.DB.Query("SELECT id, username, COALESCE(email, ''), COALESCE(display_name, ''), COALESCE(groups, '[]'), COALESCE(created_at, '') FROM users")
+		rows, err := database.ListUsers(app)
 		if err != nil {
-			http.Error(w, "Failed to export users", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to export users")
 			return
 		}
 		defer rows.Close()
@@ -152,13 +150,13 @@ func BackupHandler(app *server.App) http.HandlerFunc {
 		}
 		if err := rows.Err(); err != nil {
 			log.Printf("Error iterating user rows during backup: %v", err)
-			http.Error(w, "Failed to export users", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to export users")
 			return
 		}
 		backup["users"] = users
 
 		// Export user preferences
-		rows2, err := app.DB.Query("SELECT user_id, preferences FROM user_preferences")
+		rows2, err := database.ListPreferences(app)
 		if err == nil {
 			defer rows2.Close()
 			var prefs []map[string]interface{}
@@ -215,9 +213,7 @@ func BackupHandler(app *server.App) http.HandlerFunc {
 		database.LogAudit(app, adminName, "backup_created", fmt.Sprintf("Backup exported with %d users", len(users)), r.RemoteAddr)
 
 		// Set headers for file download
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=dashgate-backup-%s.json", time.Now().Format("2006-01-02")))
-		json.NewEncoder(w).Encode(backup)
+		respondJSON(w, http.StatusOK, backup)
 	}
 }
 
@@ -225,20 +221,20 @@ func BackupHandler(app *server.App) http.HandlerFunc {
 func RestoreHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		var backup map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&backup); err != nil {
-			http.Error(w, "Invalid backup file", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid backup file")
 			return
 		}
 
 		// Validate backup version
 		version, _ := backup["version"].(string)
 		if version != "1.0" {
-			http.Error(w, "Unsupported backup version", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Unsupported backup version")
 			return
 		}
 
@@ -249,7 +245,7 @@ func RestoreHandler(app *server.App) http.HandlerFunc {
 			for _, field := range authBoolFields {
 				if v, exists := sysConfig[field]; exists {
 					if _, isBool := v.(bool); !isBool {
-						http.Error(w, fmt.Sprintf("Invalid type for %s: expected boolean", field), http.StatusBadRequest)
+						respondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid type for %s: expected boolean", field))
 						return
 					}
 				}
@@ -260,7 +256,7 @@ func RestoreHandler(app *server.App) http.HandlerFunc {
 			for _, field := range stringFields {
 				if v, exists := sysConfig[field]; exists {
 					if _, isStr := v.(string); !isStr {
-						http.Error(w, fmt.Sprintf("Invalid type for %s: expected string", field), http.StatusBadRequest)
+						respondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid type for %s: expected string", field))
 						return
 					}
 				}
@@ -279,7 +275,7 @@ func RestoreHandler(app *server.App) http.HandlerFunc {
 			_, hasOIDC := sysConfig["oidcAuthEnabled"]
 
 			if hasProxy && hasLocal && hasLDAP && hasOIDC && !proxyAuth && !localAuth && !ldapAuth && !oidcAuth {
-				http.Error(w, "Backup rejected: at least one authentication method must be enabled (localAuthEnabled, proxyAuthEnabled, ldapAuthEnabled, or oidcAuthEnabled)", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Backup rejected: at least one authentication method must be enabled (localAuthEnabled, proxyAuthEnabled, ldapAuthEnabled, or oidcAuthEnabled)")
 				return
 			}
 		}
@@ -289,12 +285,12 @@ func RestoreHandler(app *server.App) http.HandlerFunc {
 			for i, u := range users {
 				user, ok := u.(map[string]interface{})
 				if !ok {
-					http.Error(w, fmt.Sprintf("Invalid user record at index %d: expected object", i), http.StatusBadRequest)
+					respondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid user record at index %d: expected object", i))
 					return
 				}
 				username, _ := user["username"].(string)
 				if strings.TrimSpace(username) == "" {
-					http.Error(w, fmt.Sprintf("Invalid user record at index %d: username must be a non-empty string", i), http.StatusBadRequest)
+					respondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid user record at index %d: username must be a non-empty string", i))
 					return
 				}
 			}
@@ -374,9 +370,7 @@ func RestoreHandler(app *server.App) http.HandlerFunc {
 					if !ok {
 						continue
 					}
-					_, err := app.DB.Exec(`INSERT OR REPLACE INTO user_preferences (user_id, preferences, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
-						userId, prefsStr)
-					if err == nil {
+					if err := database.SavePreferencesByUserID(app, userId, prefsStr); err == nil {
 						restored["userPreferences"]++
 					}
 				}
@@ -390,8 +384,7 @@ func RestoreHandler(app *server.App) http.HandlerFunc {
 		}
 		database.LogAudit(app, adminName, "backup_restored", fmt.Sprintf("Restored: users=%d, prefs=%d, config=%d", restored["users"], restored["userPreferences"], restored["systemConfig"]), r.RemoteAddr)
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"status":   "restored",
 			"restored": restored,
 			"note":     "Passwords and secrets were not restored for security. Please re-enter them in settings.",

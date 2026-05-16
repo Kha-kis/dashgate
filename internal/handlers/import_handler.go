@@ -18,24 +18,24 @@ import (
 func ImportPreviewHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		var req imports.ImportRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		if req.Content == "" {
-			http.Error(w, "Content is required", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Content is required")
 			return
 		}
 
 		result, err := imports.Parse(req.Source, req.Content)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse config: %v", err), http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, fmt.Sprintf("Failed to parse config: %v", err))
 			return
 		}
 
@@ -46,15 +46,14 @@ func ImportPreviewHandler(app *server.App) http.HandlerFunc {
 		}
 		database.LogAudit(app, adminName, "import_previewed", fmt.Sprintf("Previewed %s import: %d apps found", req.Source, len(result.Apps)), r.RemoteAddr)
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		respondJSON(w, http.StatusOK, result)
 	}
 }
 
 func ImportApplyHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -64,12 +63,12 @@ func ImportApplyHandler(app *server.App) http.HandlerFunc {
 			Categories map[string]string   `json:"categories"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		if len(req.Apps) == 0 {
-			http.Error(w, "No apps to import", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "No apps to import")
 			return
 		}
 
@@ -120,7 +119,7 @@ func ImportApplyHandler(app *server.App) http.HandlerFunc {
 
 		if err := config.SaveConfig(app); err != nil {
 			log.Printf("Error saving imported config: %v", err)
-			http.Error(w, "Failed to save config", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to save config")
 			return
 		}
 
@@ -131,8 +130,7 @@ func ImportApplyHandler(app *server.App) http.HandlerFunc {
 		}
 		database.LogAudit(app, adminName, "import_applied", fmt.Sprintf("Imported %d apps from %s", imported, req.Source), r.RemoteAddr)
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"status":   "imported",
 			"count":    imported,
 		})

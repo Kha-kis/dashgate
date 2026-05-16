@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"dashgate/internal/database"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
 )
@@ -21,14 +22,15 @@ func GetLocalUser(app *server.App, r *http.Request) *models.AuthenticatedUser {
 		return nil
 	}
 
-	var username, email, displayName, groupsJSON, passwordHash string
-	err = app.DB.QueryRow(
-		"SELECT u.id, u.username, u.email, u.display_name, u.groups, u.password_hash FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ? AND s.expires_at > datetime('now')",
-		cookie.Value,
-	).Scan(new(int), &username, &email, &displayName, &groupsJSON, &passwordHash)
+	su, err := database.GetUserBySession(app, cookie.Value)
 	if err != nil {
 		return nil
 	}
+	username := su.Username
+	email := su.Email
+	displayName := su.DisplayName
+	groupsJSON := su.GroupsJSON
+	passwordHash := su.PasswordHash
 
 	// Handle NULL values
 	if email == "" {

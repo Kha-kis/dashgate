@@ -35,13 +35,13 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 		}
 
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		// Only allow setup if not completed
 		if !database.NeedsSetup(app) {
-			http.Error(w, "Setup already completed", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Setup already completed")
 			return
 		}
 
@@ -82,13 +82,13 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		// Validate at least one auth provider is enabled
 		if !req.ProxyAuthEnabled && !req.LocalAuthEnabled && !req.LDAPAuthEnabled && !req.OIDCAuthEnabled {
-			http.Error(w, "At least one authentication provider must be enabled", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "At least one authentication provider must be enabled")
 			return
 		}
 
@@ -103,22 +103,22 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 		// If local auth, require admin credentials
 		if req.LocalAuthEnabled {
 			if req.Username == "" || req.Password == "" {
-				http.Error(w, "Username and password required for local auth", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Username and password required for local auth")
 				return
 			}
 
 			if len(req.Password) < 8 {
-				http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Password must be at least 8 characters")
 				return
 			}
 
 			// Create admin user
 			if err := database.CreateAdminUser(app, req.Username, req.Password, req.Email, req.DisplayName); err != nil {
 				if strings.Contains(err.Error(), "UNIQUE") {
-					http.Error(w, "Username or email already exists", http.StatusConflict)
+					respondError(w, http.StatusConflict, "Username or email already exists")
 				} else {
 					log.Printf("Error creating admin user: %v", err)
-					http.Error(w, "Failed to create admin user", http.StatusInternalServerError)
+					respondError(w, http.StatusInternalServerError, "Failed to create admin user")
 				}
 				return
 			}
@@ -194,7 +194,7 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 
 		if err := database.SaveSystemConfig(app); err != nil {
 			log.Printf("Error saving system config: %v", err)
-			http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to save configuration")
 			return
 		}
 
@@ -205,8 +205,7 @@ func SetupHandler(app *server.App) http.HandlerFunc {
 			redirect = "/login"
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"status":   "ok",
 			"redirect": redirect,
 		})

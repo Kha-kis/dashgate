@@ -34,19 +34,17 @@ func DockerDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"appCount":    len(app.DockerDiscovery.GetApps()),
 				"envOverride": app.DockerDiscoveryEnvOverride,
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(status)
+			respondJSON(w, http.StatusOK, status)
 
 		case http.MethodPost:
 			// Trigger manual refresh
 			go discovery.DiscoverDockerApps(app)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "refresh triggered"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "refresh triggered"})
 
 		case http.MethodPut:
 			// Update settings (only works if not controlled by env var)
 			if app.DockerDiscoveryEnvOverride {
-				http.Error(w, "Docker discovery is controlled by environment variables", http.StatusConflict)
+				respondError(w, http.StatusConflict, "Docker discovery is controlled by environment variables")
 				return
 			}
 
@@ -55,7 +53,7 @@ func DockerDiscoveryHandler(app *server.App) http.HandlerFunc {
 				SocketPath string `json:"socketPath"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid JSON", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid JSON")
 				return
 			}
 
@@ -70,7 +68,7 @@ func DockerDiscoveryHandler(app *server.App) http.HandlerFunc {
 			// Save to database
 			if err := database.SaveSystemConfig(app); err != nil {
 				log.Printf("Failed to save discovery config: %v", err)
-				http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save configuration")
 				return
 			}
 
@@ -85,14 +83,13 @@ func DockerDiscoveryHandler(app *server.App) http.HandlerFunc {
 			enabled := app.DockerDiscovery.Enabled
 			app.DiscoveryMu.Unlock()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusOK, map[string]interface{}{
 				"status":  "updated",
 				"enabled": enabled,
 			})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
@@ -120,18 +117,16 @@ func TraefikDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"appCount":    len(app.TraefikDiscovery.GetApps()),
 				"envOverride": app.TraefikDiscoveryEnvOverride,
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(status)
+			respondJSON(w, http.StatusOK, status)
 
 		case http.MethodPost:
 			// Trigger manual refresh
 			go discovery.DiscoverTraefikApps(app)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "refresh triggered"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "refresh triggered"})
 
 		case http.MethodPut:
 			if app.TraefikDiscoveryEnvOverride {
-				http.Error(w, "Traefik discovery is controlled by environment variables", http.StatusConflict)
+				respondError(w, http.StatusConflict, "Traefik discovery is controlled by environment variables")
 				return
 			}
 
@@ -142,13 +137,13 @@ func TraefikDiscoveryHandler(app *server.App) http.HandlerFunc {
 				Password string `json:"password"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid JSON", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid JSON")
 				return
 			}
 
 			if req.URL != "" {
 				if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
-					http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+					respondError(w, http.StatusBadRequest, "Invalid URL: "+err.Error())
 					return
 				}
 			}
@@ -166,7 +161,7 @@ func TraefikDiscoveryHandler(app *server.App) http.HandlerFunc {
 			// Save to database
 			if err := database.SaveSystemConfig(app); err != nil {
 				log.Printf("Failed to save discovery config: %v", err)
-				http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save configuration")
 				return
 			}
 
@@ -181,14 +176,13 @@ func TraefikDiscoveryHandler(app *server.App) http.HandlerFunc {
 			enabled := app.TraefikDiscovery.Enabled
 			app.DiscoveryMu.Unlock()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusOK, map[string]interface{}{
 				"status":  "updated",
 				"enabled": enabled,
 			})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
@@ -212,17 +206,15 @@ func NginxDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"appCount":    len(app.NginxDiscovery.GetApps()),
 				"envOverride": app.NginxDiscoveryEnvOverride,
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(status)
+			respondJSON(w, http.StatusOK, status)
 
 		case http.MethodPost:
 			go discovery.DiscoverNginxApps(app)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "refresh triggered"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "refresh triggered"})
 
 		case http.MethodPut:
 			if app.NginxDiscoveryEnvOverride {
-				http.Error(w, "Nginx discovery is controlled by environment variables", http.StatusConflict)
+				respondError(w, http.StatusConflict, "Nginx discovery is controlled by environment variables")
 				return
 			}
 
@@ -231,13 +223,13 @@ func NginxDiscoveryHandler(app *server.App) http.HandlerFunc {
 				ConfigPath string `json:"configPath"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid JSON", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid JSON")
 				return
 			}
 
 			if req.ConfigPath != "" {
 				if err := urlvalidation.ValidateNginxConfigPath(req.ConfigPath); err != nil {
-					http.Error(w, "Invalid config path: "+err.Error(), http.StatusBadRequest)
+					respondError(w, http.StatusBadRequest, "Invalid config path: "+err.Error())
 					return
 				}
 			}
@@ -251,7 +243,7 @@ func NginxDiscoveryHandler(app *server.App) http.HandlerFunc {
 
 			if err := database.SaveSystemConfig(app); err != nil {
 				log.Printf("Failed to save discovery config: %v", err)
-				http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save configuration")
 				return
 			}
 
@@ -265,14 +257,13 @@ func NginxDiscoveryHandler(app *server.App) http.HandlerFunc {
 			enabled := app.NginxDiscovery.Enabled
 			app.DiscoveryMu.Unlock()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusOK, map[string]interface{}{
 				"status":  "updated",
 				"enabled": enabled,
 			})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
@@ -298,17 +289,15 @@ func NPMDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"appCount":    len(app.NPMDiscovery.GetApps()),
 				"envOverride": app.NPMDiscoveryEnvOverride,
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(status)
+			respondJSON(w, http.StatusOK, status)
 
 		case http.MethodPost:
 			go discovery.DiscoverNPMApps(app)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "refresh triggered"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "refresh triggered"})
 
 		case http.MethodPut:
 			if app.NPMDiscoveryEnvOverride {
-				http.Error(w, "NPM discovery is controlled by environment variables", http.StatusConflict)
+				respondError(w, http.StatusConflict, "NPM discovery is controlled by environment variables")
 				return
 			}
 
@@ -319,13 +308,13 @@ func NPMDiscoveryHandler(app *server.App) http.HandlerFunc {
 				Password string `json:"password"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid JSON", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid JSON")
 				return
 			}
 
 			if req.URL != "" {
 				if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
-					http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+					respondError(w, http.StatusBadRequest, "Invalid URL: "+err.Error())
 					return
 				}
 			}
@@ -342,7 +331,7 @@ func NPMDiscoveryHandler(app *server.App) http.HandlerFunc {
 
 			if err := database.SaveSystemConfig(app); err != nil {
 				log.Printf("Failed to save discovery config: %v", err)
-				http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save configuration")
 				return
 			}
 
@@ -356,14 +345,13 @@ func NPMDiscoveryHandler(app *server.App) http.HandlerFunc {
 			enabled := app.NPMDiscovery.Enabled
 			app.DiscoveryMu.Unlock()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusOK, map[string]interface{}{
 				"status":  "updated",
 				"enabled": enabled,
 			})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
@@ -391,17 +379,15 @@ func CaddyDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"appCount":    len(app.CaddyDiscovery.GetApps()),
 				"envOverride": app.CaddyDiscoveryEnvOverride,
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(status)
+			respondJSON(w, http.StatusOK, status)
 
 		case http.MethodPost:
 			go discovery.DiscoverCaddyApps(app)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "refresh triggered"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "refresh triggered"})
 
 		case http.MethodPut:
 			if app.CaddyDiscoveryEnvOverride {
-				http.Error(w, "Caddy discovery is controlled by environment variables", http.StatusConflict)
+				respondError(w, http.StatusConflict, "Caddy discovery is controlled by environment variables")
 				return
 			}
 
@@ -412,13 +398,13 @@ func CaddyDiscoveryHandler(app *server.App) http.HandlerFunc {
 				Password string `json:"password"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid JSON", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid JSON")
 				return
 			}
 
 			if req.URL != "" {
 				if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
-					http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+					respondError(w, http.StatusBadRequest, "Invalid URL: "+err.Error())
 					return
 				}
 			}
@@ -434,7 +420,7 @@ func CaddyDiscoveryHandler(app *server.App) http.HandlerFunc {
 
 			if err := database.SaveSystemConfig(app); err != nil {
 				log.Printf("Failed to save discovery config: %v", err)
-				http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save configuration")
 				return
 			}
 
@@ -448,14 +434,13 @@ func CaddyDiscoveryHandler(app *server.App) http.HandlerFunc {
 			enabled := app.CaddyDiscovery.Enabled
 			app.DiscoveryMu.Unlock()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusOK, map[string]interface{}{
 				"status":  "updated",
 				"enabled": enabled,
 			})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
@@ -464,7 +449,7 @@ func CaddyDiscoveryHandler(app *server.App) http.HandlerFunc {
 func TraefikTestHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -474,25 +459,24 @@ func TraefikTestHandler(app *server.App) http.HandlerFunc {
 			Password string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid JSON")
 			return
 		}
 
 		if req.URL == "" {
-			http.Error(w, "URL is required", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "URL is required")
 			return
 		}
 
 		if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
-			http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid URL: "+err.Error())
 			return
 		}
 
 		// Test the connection by fetching the routers endpoint
 		httpReq, err := http.NewRequest("GET", req.URL+"/api/http/routers", nil)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"error":   fmt.Sprintf("Failed to create request: %v", err),
 			})
@@ -506,8 +490,7 @@ func TraefikTestHandler(app *server.App) http.HandlerFunc {
 
 		resp, err := app.HTTPClient.Do(httpReq)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusBadGateway, map[string]interface{}{
 				"success": false,
 				"error":   fmt.Sprintf("Connection failed: %v", err),
 			})
@@ -516,8 +499,7 @@ func TraefikTestHandler(app *server.App) http.HandlerFunc {
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusUnauthorized {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
 				"success": false,
 				"error":   "Authentication required or invalid credentials",
 			})
@@ -525,8 +507,7 @@ func TraefikTestHandler(app *server.App) http.HandlerFunc {
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusBadGateway, map[string]interface{}{
 				"success": false,
 				"error":   fmt.Sprintf("Traefik API returned status %d", resp.StatusCode),
 			})
@@ -536,16 +517,14 @@ func TraefikTestHandler(app *server.App) http.HandlerFunc {
 		// Try to decode the response to validate it's a valid Traefik API
 		var routers []models.TraefikRouter
 		if err := json.NewDecoder(resp.Body).Decode(&routers); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusBadGateway, map[string]interface{}{
 				"success": false,
 				"error":   "Invalid response from Traefik API",
 			})
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"success":     true,
 			"message":     fmt.Sprintf("Connection successful! Found %d routers", len(routers)),
 			"routerCount": len(routers),
@@ -557,7 +536,7 @@ func TraefikTestHandler(app *server.App) http.HandlerFunc {
 func NPMTestHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -567,17 +546,17 @@ func NPMTestHandler(app *server.App) http.HandlerFunc {
 			Password string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid JSON")
 			return
 		}
 
 		if req.URL == "" || req.Email == "" || req.Password == "" {
-			http.Error(w, "URL, email, and password are required", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "URL, email, and password are required")
 			return
 		}
 
 		if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
-			http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid URL: "+err.Error())
 			return
 		}
 
@@ -588,8 +567,7 @@ func NPMTestHandler(app *server.App) http.HandlerFunc {
 		}
 		body, err := json.Marshal(payload)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"error":   "Failed to create request",
 			})
@@ -598,8 +576,7 @@ func NPMTestHandler(app *server.App) http.HandlerFunc {
 
 		resp, err := app.HTTPClient.Post(req.URL+"/api/tokens", "application/json", bytes.NewReader(body))
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusBadGateway, map[string]interface{}{
 				"success": false,
 				"error":   fmt.Sprintf("Connection failed: %v", err),
 			})
@@ -608,8 +585,7 @@ func NPMTestHandler(app *server.App) http.HandlerFunc {
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
 				"success": false,
 				"error":   "Invalid credentials",
 			})
@@ -617,8 +593,7 @@ func NPMTestHandler(app *server.App) http.HandlerFunc {
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusBadGateway, map[string]interface{}{
 				"success": false,
 				"error":   fmt.Sprintf("NPM API returned status %d", resp.StatusCode),
 			})
@@ -629,16 +604,14 @@ func NPMTestHandler(app *server.App) http.HandlerFunc {
 			Token string `json:"token"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil || tokenResp.Token == "" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusBadGateway, map[string]interface{}{
 				"success": false,
 				"error":   "Invalid response from NPM API",
 			})
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"message": "Connection successful! Authentication verified",
 		})
@@ -649,7 +622,7 @@ func NPMTestHandler(app *server.App) http.HandlerFunc {
 func CaddyTestHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -659,25 +632,24 @@ func CaddyTestHandler(app *server.App) http.HandlerFunc {
 			Password string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid JSON")
 			return
 		}
 
 		if req.URL == "" {
-			http.Error(w, "URL is required", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "URL is required")
 			return
 		}
 
 		if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
-			http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid URL: "+err.Error())
 			return
 		}
 
 		// Test the connection by fetching the config endpoint
 		httpReq, err := http.NewRequest("GET", req.URL+"/config/", nil)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
 				"success": false,
 				"error":   fmt.Sprintf("Failed to create request: %v", err),
 			})
@@ -691,8 +663,7 @@ func CaddyTestHandler(app *server.App) http.HandlerFunc {
 
 		resp, err := app.HTTPClient.Do(httpReq)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusBadGateway, map[string]interface{}{
 				"success": false,
 				"error":   fmt.Sprintf("Connection failed: %v", err),
 			})
@@ -701,8 +672,7 @@ func CaddyTestHandler(app *server.App) http.HandlerFunc {
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusUnauthorized {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusUnauthorized, map[string]interface{}{
 				"success": false,
 				"error":   "Authentication required or invalid credentials",
 			})
@@ -710,16 +680,14 @@ func CaddyTestHandler(app *server.App) http.HandlerFunc {
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusBadGateway, map[string]interface{}{
 				"success": false,
 				"error":   fmt.Sprintf("Caddy Admin API returned status %d", resp.StatusCode),
 			})
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"message": "Connection successful! Caddy Admin API is accessible",
 		})
@@ -747,17 +715,15 @@ func UnraidDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"appCount":    len(app.UnraidDiscovery.GetApps()),
 				"envOverride": app.UnraidDiscoveryEnvOverride,
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(status)
+			respondJSON(w, http.StatusOK, status)
 
 		case http.MethodPost:
 			go discovery.DiscoverUnraidApps(app)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "refresh triggered"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "refresh triggered"})
 
 		case http.MethodPut:
 			if app.UnraidDiscoveryEnvOverride {
-				http.Error(w, "Unraid discovery is controlled by environment variables", http.StatusConflict)
+				respondError(w, http.StatusConflict, "Unraid discovery is controlled by environment variables")
 				return
 			}
 
@@ -767,13 +733,13 @@ func UnraidDiscoveryHandler(app *server.App) http.HandlerFunc {
 				APIKey  string `json:"apiKey"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid JSON", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid JSON")
 				return
 			}
 
 			if req.URL != "" {
 				if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
-					http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+					respondError(w, http.StatusBadRequest, "Invalid URL: "+err.Error())
 					return
 				}
 			}
@@ -789,7 +755,7 @@ func UnraidDiscoveryHandler(app *server.App) http.HandlerFunc {
 
 			if err := database.SaveSystemConfig(app); err != nil {
 				log.Printf("Failed to save discovery config: %v", err)
-				http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save configuration")
 				return
 			}
 
@@ -803,14 +769,13 @@ func UnraidDiscoveryHandler(app *server.App) http.HandlerFunc {
 			enabled := app.UnraidDiscovery.Enabled
 			app.DiscoveryMu.Unlock()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, http.StatusOK, map[string]interface{}{
 				"status":  "updated",
 				"enabled": enabled,
 			})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
@@ -819,7 +784,7 @@ func UnraidDiscoveryHandler(app *server.App) http.HandlerFunc {
 func UnraidTestHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -828,23 +793,22 @@ func UnraidTestHandler(app *server.App) http.HandlerFunc {
 			APIKey string `json:"apiKey"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid JSON")
 			return
 		}
 
 		if req.URL == "" || req.APIKey == "" {
-			http.Error(w, "URL and API key are required", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "URL and API key are required")
 			return
 		}
 
 		if err := urlvalidation.ValidateDiscoveryURL(req.URL); err != nil {
-			http.Error(w, "Invalid URL: "+err.Error(), http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid URL: "+err.Error())
 			return
 		}
 
 		containerCount, err := discovery.TestUnraidConnection(app.HTTPClient, req.URL, req.APIKey)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
 			status := http.StatusBadGateway
 			errStr := err.Error()
 			switch {
@@ -853,16 +817,14 @@ func UnraidTestHandler(app *server.App) http.HandlerFunc {
 			case strings.Contains(errStr, "SSRF protection") || strings.Contains(errStr, "Invalid URL"):
 				status = http.StatusBadRequest
 			}
-			w.WriteHeader(status)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			respondJSON(w, status, map[string]interface{}{
 				"success": false,
 				"error":   errStr,
 			})
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"success":        true,
 			"message":        fmt.Sprintf("Connection successful! Found %d container(s) with WebUI", containerCount),
 			"containerCount": containerCount,

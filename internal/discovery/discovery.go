@@ -23,22 +23,31 @@ func GetAllRawDiscoveredApps(app *server.App) []models.DiscoveredAppWithOverride
 		}
 	}
 
-	if app.DockerDiscovery.Enabled {
+	app.DiscoveryMu.RLock()
+	dockerEnabled := app.DockerDiscovery.Enabled
+	traefikEnabled := app.TraefikDiscovery.Enabled
+	nginxEnabled := app.NginxDiscovery.Enabled
+	npmEnabled := app.NPMDiscovery.Enabled
+	caddyEnabled := app.CaddyDiscovery.Enabled
+	unraidEnabled := app.UnraidDiscovery.Enabled
+	app.DiscoveryMu.RUnlock()
+
+	if dockerEnabled {
 		addApps(app.DockerDiscovery.GetApps(), "docker")
 	}
-	if app.TraefikDiscovery.Enabled {
+	if traefikEnabled {
 		addApps(app.TraefikDiscovery.GetApps(), "traefik")
 	}
-	if app.NginxDiscovery.Enabled {
+	if nginxEnabled {
 		addApps(app.NginxDiscovery.GetApps(), "nginx")
 	}
-	if app.NPMDiscovery.Enabled {
+	if npmEnabled {
 		addApps(app.NPMDiscovery.GetApps(), "npm")
 	}
-	if app.CaddyDiscovery.Enabled {
+	if caddyEnabled {
 		addApps(app.CaddyDiscovery.GetApps(), "caddy")
 	}
-	if app.UnraidDiscovery.Enabled {
+	if unraidEnabled {
 		addApps(app.UnraidDiscovery.GetApps(), "unraid")
 	}
 

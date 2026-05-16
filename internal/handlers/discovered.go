@@ -16,18 +16,17 @@ func DiscoveredAppsHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.GetAuthenticatedUser(app, r)
 		if user == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			respondError(w, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		apps := app.DockerDiscovery.GetApps()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(apps)
+		respondJSON(w, http.StatusOK, apps)
 	}
 }
 
@@ -43,31 +42,31 @@ type BulkDiscoveredAppsRequest struct {
 func BulkDiscoveredAppsHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		var req BulkDiscoveredAppsRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid JSON: "+err.Error())
 			return
 		}
 
 		if len(req.URLs) == 0 {
-			http.Error(w, "No URLs provided", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "No URLs provided")
 			return
 		}
 
 		// Limit batch size to prevent abuse
 		const maxBulkURLs = 100
 		if len(req.URLs) > maxBulkURLs {
-			http.Error(w, "Too many URLs (max 100)", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Too many URLs (max 100)")
 			return
 		}
 
 		// Validate action
 		if req.Action != "show" {
-			http.Error(w, "Invalid action: "+req.Action, http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid action: "+req.Action)
 			return
 		}
 
@@ -103,12 +102,11 @@ func BulkDiscoveredAppsHandler(app *server.App) http.HandlerFunc {
 
 		// Save all overrides in a batch
 		if err := database.SaveDiscoveredOverridesBatch(app, overrides); err != nil {
-			http.Error(w, "Failed to save: "+err.Error(), http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to save: "+err.Error())
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"status":  "ok",
 			"updated": len(overrides),
 		})
@@ -142,44 +140,41 @@ func AdminDiscoveredAppsHandler(app *server.App) http.HandlerFunc {
 				"active": rawApps,
 				"stale":  stale,
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+			respondJSON(w, http.StatusOK, response)
 
 		case http.MethodPut:
 			var o models.DiscoveredAppOverride
 			if err := json.NewDecoder(r.Body).Decode(&o); err != nil {
-				http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid JSON: "+err.Error())
 				return
 			}
 			if o.URL == "" {
-				http.Error(w, "URL is required", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "URL is required")
 				return
 			}
 			if o.Groups == nil {
 				o.Groups = []string{}
 			}
 			if err := database.SaveDiscoveredOverride(app, &o); err != nil {
-				http.Error(w, "Failed to save: "+err.Error(), http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save: "+err.Error())
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 
 		case http.MethodDelete:
 			url := r.URL.Query().Get("url")
 			if url == "" {
-				http.Error(w, "URL parameter required", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "URL parameter required")
 				return
 			}
 			if err := database.DeleteDiscoveredOverride(app, url); err != nil {
-				http.Error(w, "Failed to delete: "+err.Error(), http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to delete: "+err.Error())
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }

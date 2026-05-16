@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"dashgate/internal/database"
 	"dashgate/internal/server"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -64,16 +65,13 @@ func OIDCAuthHandler(app *server.App) http.HandlerFunc {
 		}
 
 		if app.DB != nil {
-			if _, err := app.DB.Exec("INSERT INTO oidc_states (state, redirect_url, created_at) VALUES (?, ?, ?)",
-				state, redirectURL, time.Now()); err != nil {
+			if err := database.CreateOIDCState(app, state, redirectURL); err != nil {
 				log.Printf("Failed to store OIDC state: %v", err)
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
 			// Clean up old states (best-effort)
-			if _, err := app.DB.Exec("DELETE FROM oidc_states WHERE created_at < ?", time.Now().Add(-10*time.Minute)); err != nil {
-				log.Printf("Failed to clean up old OIDC states: %v", err)
-			}
+			database.CleanOldOIDCStates(app)
 		}
 
 		// Redirect to OIDC provider
@@ -105,12 +103,12 @@ func OIDCCallbackHandler(app *server.App) http.HandlerFunc {
 			http.Error(w, "OIDC authentication unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		err := app.DB.QueryRow("SELECT redirect_url FROM oidc_states WHERE state = ?", state).Scan(&redirectURL)
+		redirectURL, err := database.GetOIDCState(app, state)
 		if err != nil {
 			http.Error(w, "Invalid state", http.StatusBadRequest)
 			return
 		}
-		app.DB.Exec("DELETE FROM oidc_states WHERE state = ?", state)
+		database.DeleteOIDCState(app, state)
 		if !isValidRedirect(redirectURL) {
 			redirectURL = "/"
 		}
@@ -200,22 +198,12 @@ func OIDCCallbackHandler(app *server.App) http.HandlerFunc {
 		// Create or update user in database using upsert to avoid race conditions
 		var userID int
 		groupsJSON, _ := json.Marshal(claims.Groups)
-		_, err = app.DB.Exec(
-			`INSERT INTO users (username, email, password_hash, display_name, groups)
-			 VALUES (?, ?, 'OIDC_USER', ?, ?)
-			 ON CONFLICT(username) DO UPDATE SET
-			   email = excluded.email,
-			   display_name = excluded.display_name,
-			   groups = excluded.groups,
-			   updated_at = ?`,
-			username, claims.Email, displayName, string(groupsJSON), time.Now(),
-		)
-		if err != nil {
+		if err := database.UpsertOIDCUser(app, username, claims.Email, displayName, string(groupsJSON)); err != nil {
 			log.Printf("Failed to upsert OIDC user: %v", err)
 			http.Error(w, "Failed to create user", http.StatusInternalServerError)
 			return
 		}
-		err = app.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
+		userID, err = database.GetUserIDByUsername(app, username)
 		if err != nil {
 			log.Printf("Failed to retrieve OIDC user ID: %v", err)
 			http.Error(w, "Failed to retrieve user", http.StatusInternalServerError)
@@ -223,7 +211,7 @@ func OIDCCallbackHandler(app *server.App) http.HandlerFunc {
 		}
 
 		// Invalidate any existing sessions for this user to prevent session fixation
-		app.DB.Exec("DELETE FROM sessions WHERE user_id = ?", userID)
+		database.InvalidateUserSessions(app, userID)
 
 		// Create session
 		sessionToken, err := GenerateSessionToken()
@@ -234,11 +222,7 @@ func OIDCCallbackHandler(app *server.App) http.HandlerFunc {
 		}
 
 		expiresAt := time.Now().Add(time.Duration(app.AuthConfig.SessionDuration) * 24 * time.Hour)
-		_, err = app.DB.Exec(
-			"INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)",
-			userID, sessionToken, expiresAt,
-		)
-		if err != nil {
+		if err := database.CreateSession(app, userID, sessionToken, expiresAt); err != nil {
 			log.Printf("Error creating session: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

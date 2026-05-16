@@ -30,18 +30,16 @@ func APIKeysHandler(app *server.App) http.HandlerFunc {
 		case http.MethodDelete:
 			deleteAPIKey(app, w, r)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
 
 func listAPIKeys(app *server.App, w http.ResponseWriter, r *http.Request) {
-	rows, err := app.DB.Query(
-		"SELECT id, name, key_prefix, username, groups, permissions, expires_at, last_used_at, created_at FROM api_keys ORDER BY created_at DESC",
-	)
+	rows, err := database.ListAPIKeysOrdered(app)
 	if err != nil {
 		log.Printf("Error listing API keys: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	defer rows.Close()
@@ -69,12 +67,11 @@ func listAPIKeys(app *server.App, w http.ResponseWriter, r *http.Request) {
 
 	if err := rows.Err(); err != nil {
 		log.Printf("Error iterating API keys rows: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(keys)
+	respondJSON(w, http.StatusOK, keys)
 }
 
 func createAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
@@ -87,12 +84,12 @@ func createAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.Name == "" {
-		http.Error(w, "Name is required", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "Name is required")
 		return
 	}
 
@@ -108,7 +105,7 @@ func createAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 	keyBytes := make([]byte, 32)
 	if _, err := rand.Read(keyBytes); err != nil {
 		log.Printf("Error generating random bytes for API key: %v", err)
-		http.Error(w, "Failed to generate key", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Failed to generate key")
 		return
 	}
 	apiKey := base64.URLEncoding.EncodeToString(keyBytes)
@@ -117,7 +114,7 @@ func createAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 	// Hash the key
 	keyHash, err := bcrypt.GenerateFromPassword([]byte(apiKey), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "Failed to generate key", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Failed to generate key")
 		return
 	}
 
@@ -130,17 +127,12 @@ func createAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 		expiresAt = &t
 	}
 
-	result, err := app.DB.Exec(
-		"INSERT INTO api_keys (name, key_hash, key_prefix, username, groups, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		req.Name, string(keyHash), keyPrefix, req.Username, string(groupsJSON), string(permsJSON), expiresAt,
-	)
+	id, err := database.CreateAPIKey(app, req.Name, string(keyHash), keyPrefix, req.Username, string(groupsJSON), string(permsJSON), expiresAt)
 	if err != nil {
 		log.Printf("Error creating API key: %v", err)
-		http.Error(w, "Failed to create key", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Failed to create key")
 		return
 	}
-
-	id, _ := result.LastInsertId()
 
 	adminUser := auth.GetUserFromContext(r)
 	adminName := ""
@@ -149,8 +141,7 @@ func createAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 	}
 	database.LogAudit(app, adminName, "api_key_created", fmt.Sprintf("Created API key %q (id=%d, prefix=%s)", req.Name, id, keyPrefix), r.RemoteAddr)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"id":     id,
 		"name":   req.Name,
 		"key":    apiKey, // Only returned once!
@@ -161,26 +152,25 @@ func createAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 func deleteAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	if idStr == "" {
-		http.Error(w, "ID required", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "ID required")
 		return
 	}
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "Invalid ID")
 		return
 	}
 
-	result, err := app.DB.Exec("DELETE FROM api_keys WHERE id = ?", id)
+	rowsAffected, err := database.DeleteAPIKey(app, id)
 	if err != nil {
 		log.Printf("Error deleting API key: %v", err)
-		http.Error(w, "Failed to delete key", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Failed to delete key")
 		return
 	}
 
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		http.Error(w, "Key not found", http.StatusNotFound)
+	if rowsAffected == 0 {
+		respondError(w, http.StatusNotFound, "Key not found")
 		return
 	}
 
@@ -191,6 +181,5 @@ func deleteAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 	}
 	database.LogAudit(app, adminName, "api_key_deleted", fmt.Sprintf("Deleted API key id=%d", id), r.RemoteAddr)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"dashgate/internal/auth"
+	"dashgate/internal/database"
 	"dashgate/internal/server"
 )
 
@@ -14,13 +15,13 @@ func UserPreferencesHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.GetAuthenticatedUser(app, r)
 		if user == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			respondError(w, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 
 		// Get user ID from database
 		var userID int
-		err := app.DB.QueryRow("SELECT id FROM users WHERE username = ?", user.Username).Scan(&userID)
+		userID, err := database.GetUserIDByUsername(app, user.Username)
 		if err != nil {
 			// User might be from LDAP/OIDC, create a preferences record with username as key
 			userID = 0 // Will use username-based lookup
@@ -30,11 +31,10 @@ func UserPreferencesHandler(app *server.App) http.HandlerFunc {
 		case http.MethodGet:
 			var preferences string
 			if userID > 0 {
-				err = app.DB.QueryRow("SELECT preferences FROM user_preferences WHERE user_id = ?", userID).Scan(&preferences)
+				preferences, err = database.GetPreferences(app, userID)
 			} else {
 				// For external users (LDAP/OIDC), use username column lookup
-				err = app.DB.QueryRow("SELECT preferences FROM user_preferences WHERE username = ?",
-					user.Username).Scan(&preferences)
+				preferences, err = database.GetPreferencesByUsername(app, user.Username)
 			}
 
 			if err != nil {
@@ -42,38 +42,35 @@ func UserPreferencesHandler(app *server.App) http.HandlerFunc {
 				preferences = "{}"
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(preferences))
+			var prefObj interface{}
+			json.Unmarshal([]byte(preferences), &prefObj)
+			respondJSON(w, http.StatusOK, prefObj)
 
 		case http.MethodPut:
 			var prefs map[string]interface{}
 			if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
-				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid request body")
 				return
 			}
 
 			prefsJSON, _ := json.Marshal(prefs)
 
 			if userID > 0 {
-				_, err = app.DB.Exec(`INSERT OR REPLACE INTO user_preferences (user_id, preferences, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
-					userID, string(prefsJSON))
+				err = database.SavePreferencesByUserID(app, userID, string(prefsJSON))
 			} else {
-				// For external users, use username column with INSERT OR REPLACE
-				_, err = app.DB.Exec(`INSERT OR REPLACE INTO user_preferences (user_id, username, preferences, updated_at) VALUES (-1, ?, ?, CURRENT_TIMESTAMP)`,
-					user.Username, string(prefsJSON))
+				err = database.SavePreferencesByUsername(app, user.Username, string(prefsJSON))
 			}
 
 			if err != nil {
 				log.Printf("Error saving preferences: %v", err)
-				http.Error(w, "Failed to save preferences", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save preferences")
 				return
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "saved"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }

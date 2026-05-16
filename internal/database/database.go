@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"dashgate/internal/auth"
+	"dashgate/internal/crypto"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
 
@@ -311,7 +311,7 @@ func CreateAdminUser(app *server.App, username, password, email, displayName str
 	}
 
 	// Hash password using SHA-256 pre-hash to handle passwords longer than bcrypt's 72-byte limit
-	hashedPassword, err := auth.HashPassword(password)
+	hashedPassword, err := crypto.HashPassword(password)
 	if err != nil {
 		return err
 	}

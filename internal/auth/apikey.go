@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"dashgate/internal/database"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
 
@@ -48,10 +49,7 @@ func GetAPIKeyUser(app *server.App, r *http.Request) *models.AuthenticatedUser {
 	keyPrefix := apiKey[:8]
 
 	// Find matching key by prefix
-	rows, err := app.DB.Query(
-		"SELECT id, key_hash, username, groups, permissions, expires_at FROM api_keys WHERE key_prefix = ?",
-		keyPrefix,
-	)
+	rows, err := database.GetAPIKeysByPrefix(app, keyPrefix)
 	if err != nil {
 		return nil
 	}
@@ -106,9 +104,7 @@ func GetAPIKeyUser(app *server.App, r *http.Request) *models.AuthenticatedUser {
 	}
 
 	// Update last used outside of row iteration to avoid deadlock with SetMaxOpenConns(1)
-	if _, err := app.DB.Exec("UPDATE api_keys SET last_used_at = ? WHERE id = ?", time.Now(), matched.id); err != nil {
-		log.Printf("Error updating API key last_used_at: %v", err)
-	}
+	database.UpdateAPIKeyLastUsed(app, matched.id)
 
 	var groups []string
 	if err := json.Unmarshal([]byte(matched.groupsJSON), &groups); err != nil {

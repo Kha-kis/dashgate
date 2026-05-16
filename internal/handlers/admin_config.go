@@ -20,9 +20,9 @@ func SystemConfigHandler(app *server.App) http.HandlerFunc {
 		case http.MethodPut:
 			updateSystemConfigHandler(app, w, r)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
-	}
+}
 }
 
 func getSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.Request) {
@@ -70,8 +70,7 @@ func getSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.Requ
 	}
 	app.SysConfigMu.RUnlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, response)
 }
 
 func updateSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.Request) {
@@ -114,7 +113,7 @@ func updateSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.R
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -124,9 +123,8 @@ func updateSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.R
 	app.SysConfigMu.RUnlock()
 
 	if req.LocalAuthEnabled && currentlyDisabled {
-		var count int
-		if err := app.DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err == nil && count == 0 {
-			http.Error(w, "Cannot enable local auth without local users. Create a local user first.", http.StatusBadRequest)
+		if count, _ := database.UserCount(app); count == 0 {
+			respondError(w, http.StatusBadRequest, "Cannot enable local auth without local users. Create a local user first.")
 			return
 		}
 	}
@@ -181,7 +179,7 @@ func updateSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.R
 
 	if err := database.SaveSystemConfig(app); err != nil {
 		log.Printf("Error saving system config: %v", err)
-		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "Failed to save configuration")
 		return
 	}
 
@@ -192,15 +190,14 @@ func updateSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.R
 	}
 	database.LogAudit(app, adminName, "system_config_updated", "System configuration updated", r.RemoteAddr)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 // AuditLogHandler returns the recent audit log entries as JSON.
 func AuditLogHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -214,11 +211,10 @@ func AuditLogHandler(app *server.App) http.HandlerFunc {
 		entries, err := database.GetAuditLogs(app, limit)
 		if err != nil {
 			log.Printf("Error fetching audit logs: %v", err)
-			http.Error(w, "Failed to fetch audit logs", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to fetch audit logs")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(entries)
+		respondJSON(w, http.StatusOK, entries)
 	}
 }

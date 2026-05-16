@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
@@ -79,7 +78,7 @@ func DashboardHandler(app *server.App) http.HandlerFunc {
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			respondError(w, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 
@@ -201,7 +200,7 @@ func DashboardHandler(app *server.App) http.HandlerFunc {
 		var buf bytes.Buffer
 		if err := app.GetTemplates().ExecuteTemplate(&buf, "index.html", data); err != nil {
 			log.Printf("Template error: %v", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Internal Server Error")
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -212,8 +211,7 @@ func DashboardHandler(app *server.App) http.HandlerFunc {
 // HealthHandler returns a simple 200 OK response for liveness probes.
 func HealthHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		respondJSON(w, http.StatusOK, map[string]string{
 			"status":  "ok",
 			"version": app.Version,
 		})
@@ -225,7 +223,7 @@ func APIHealthHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.GetAuthenticatedUser(app, r)
 		if user == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			respondError(w, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 
@@ -236,7 +234,6 @@ func APIHealthHandler(app *server.App) http.HandlerFunc {
 
 		filteredCategories := filterAppsByGroups(app, categories, user.Groups, user.IsAdmin)
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(filteredCategories)
+		respondJSON(w, http.StatusOK, filteredCategories)
 	}
 }

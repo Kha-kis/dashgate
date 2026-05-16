@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"dashgate/internal/auth"
@@ -13,12 +12,12 @@ func DependenciesHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.GetAuthenticatedUser(app, r)
 		if user == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			respondError(w, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -64,7 +63,6 @@ func DependenciesHandler(app *server.App) http.HandlerFunc {
 			result = append(result, node)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		respondJSON(w, http.StatusOK, result)
 	}
 }

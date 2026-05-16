@@ -51,8 +51,7 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 			}
 			app.ConfigMu.RUnlock()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(apps)
+			respondJSON(w, http.StatusOK, apps)
 
 		case http.MethodPost:
 			// Create new app
@@ -66,18 +65,18 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid request body")
 				return
 			}
 
 			if req.Name == "" || req.URL == "" || req.Category == "" {
-				http.Error(w, "Name, URL, and Category are required", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Name, URL, and Category are required")
 				return
 			}
 
 			// Validate URL scheme to prevent stored XSS via javascript: URLs
 			if parsedURL, err := url.Parse(req.URL); err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
-				http.Error(w, "URL must use http or https scheme", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "URL must use http or https scheme")
 				return
 			}
 
@@ -87,7 +86,7 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 				for _, a := range cat.Apps {
 					if a.URL == req.URL {
 						app.ConfigMu.Unlock()
-						http.Error(w, "App with this URL already exists", http.StatusConflict)
+						respondError(w, http.StatusConflict, "App with this URL already exists")
 						return
 					}
 				}
@@ -127,7 +126,7 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 			if err := config.SaveConfig(app); err != nil {
 				log.Printf("Error saving config: %v", err)
 				config.ReloadConfig(app)
-				http.Error(w, "Failed to save config", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save config")
 				return
 			}
 
@@ -139,8 +138,7 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 				app.HealthMu.Unlock()
 			}()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "created"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "created"})
 
 		case http.MethodPut:
 			// Update existing app
@@ -155,18 +153,18 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid request body")
 				return
 			}
 
 			if req.OriginalURL == "" || req.Name == "" || req.URL == "" || req.Category == "" {
-				http.Error(w, "OriginalURL, Name, URL, and Category are required", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "OriginalURL, Name, URL, and Category are required")
 				return
 			}
 
 			// Validate URL scheme to prevent stored XSS via javascript: URLs
 			if parsedURL, err := url.Parse(req.URL); err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
-				http.Error(w, "URL must use http or https scheme", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "URL must use http or https scheme")
 				return
 			}
 
@@ -192,7 +190,7 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 
 			if foundApp == nil {
 				app.ConfigMu.Unlock()
-				http.Error(w, "App not found", http.StatusNotFound)
+				respondError(w, http.StatusNotFound, "App not found")
 				return
 			}
 
@@ -202,7 +200,7 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 					for _, a := range cat.Apps {
 						if a.URL == req.URL {
 							app.ConfigMu.Unlock()
-							http.Error(w, "Another app with this URL already exists", http.StatusConflict)
+							respondError(w, http.StatusConflict, "Another app with this URL already exists")
 							return
 						}
 					}
@@ -267,18 +265,17 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 			if err := config.SaveConfig(app); err != nil {
 				log.Printf("Error saving config: %v", err)
 				config.ReloadConfig(app)
-				http.Error(w, "Failed to save config", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save config")
 				return
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 
 		case http.MethodDelete:
 			// Delete app
 			appURL := r.URL.Query().Get("url")
 			if appURL == "" {
-				http.Error(w, "URL parameter required", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "URL parameter required")
 				return
 			}
 
@@ -311,7 +308,7 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 			app.ConfigMu.Unlock()
 
 			if !found {
-				http.Error(w, "App not found", http.StatusNotFound)
+				respondError(w, http.StatusNotFound, "App not found")
 				return
 			}
 
@@ -324,15 +321,14 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 			if err := config.SaveConfig(app); err != nil {
 				log.Printf("Error saving config: %v", err)
 				config.ReloadConfig(app)
-				http.Error(w, "Failed to save config", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save config")
 				return
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
@@ -352,8 +348,7 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 			}
 			app.ConfigMu.RUnlock()
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(categories)
+			respondJSON(w, http.StatusOK, categories)
 
 		case http.MethodPost:
 			var req struct {
@@ -361,12 +356,12 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid request body")
 				return
 			}
 
 			if req.Name == "" {
-				http.Error(w, "Category name required", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Category name required")
 				return
 			}
 
@@ -375,7 +370,7 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 			for _, cat := range app.Config.Categories {
 				if cat.Name == req.Name {
 					app.ConfigMu.Unlock()
-					http.Error(w, "Category already exists", http.StatusConflict)
+					respondError(w, http.StatusConflict, "Category already exists")
 					return
 				}
 			}
@@ -389,12 +384,11 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 			if err := config.SaveConfig(app); err != nil {
 				log.Printf("Error saving config: %v", err)
 				config.ReloadConfig(app)
-				http.Error(w, "Failed to save config", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save config")
 				return
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "created"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "created"})
 
 		case http.MethodPut:
 			var req struct {
@@ -403,12 +397,12 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid request body")
 				return
 			}
 
 			if req.OldName == "" || req.NewName == "" {
-				http.Error(w, "Old and new category names required", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Old and new category names required")
 				return
 			}
 
@@ -424,24 +418,23 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 			app.ConfigMu.Unlock()
 
 			if !found {
-				http.Error(w, "Category not found", http.StatusNotFound)
+				respondError(w, http.StatusNotFound, "Category not found")
 				return
 			}
 
 			if err := config.SaveConfig(app); err != nil {
 				log.Printf("Error saving config: %v", err)
 				config.ReloadConfig(app)
-				http.Error(w, "Failed to save config", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save config")
 				return
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 
 		case http.MethodDelete:
 			name := r.URL.Query().Get("name")
 			if name == "" {
-				http.Error(w, "Category name required", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Category name required")
 				return
 			}
 
@@ -451,7 +444,7 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 				if cat.Name == name {
 					if len(cat.Apps) > 0 {
 						app.ConfigMu.Unlock()
-						http.Error(w, "Cannot delete category with apps", http.StatusBadRequest)
+						respondError(w, http.StatusBadRequest, "Cannot delete category with apps")
 						return
 					}
 					app.Config.Categories = append(app.Config.Categories[:i], app.Config.Categories[i+1:]...)
@@ -462,22 +455,21 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 			app.ConfigMu.Unlock()
 
 			if !found {
-				http.Error(w, "Category not found", http.StatusNotFound)
+				respondError(w, http.StatusNotFound, "Category not found")
 				return
 			}
 
 			if err := config.SaveConfig(app); err != nil {
 				log.Printf("Error saving config: %v", err)
 				config.ReloadConfig(app)
-				http.Error(w, "Failed to save config", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save config")
 				return
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+			respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
 	}
 }
@@ -486,14 +478,14 @@ func AdminCategoriesHandler(app *server.App) http.HandlerFunc {
 func AdminIconsHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		entries, err := os.ReadDir(app.IconsPath)
 		if err != nil {
 			log.Printf("Error reading icons directory: %v", err)
-			http.Error(w, "Failed to list icons", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to list icons")
 			return
 		}
 
@@ -513,8 +505,7 @@ func AdminIconsHandler(app *server.App) http.HandlerFunc {
 			}
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(icons)
+		respondJSON(w, http.StatusOK, icons)
 	}
 }
 
@@ -546,19 +537,19 @@ func validateSVGContent(content []byte) error {
 func AdminIconUploadHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		// Parse multipart form (max 5MB)
 		if err := r.ParseMultipartForm(5 << 20); err != nil {
-			http.Error(w, "File too large or invalid form", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "File too large or invalid form")
 			return
 		}
 
 		file, header, err := r.FormFile("icon")
 		if err != nil {
-			http.Error(w, "No file uploaded", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "No file uploaded")
 			return
 		}
 		defer file.Close()
@@ -567,7 +558,7 @@ func AdminIconUploadHandler(app *server.App) http.HandlerFunc {
 		ext := strings.ToLower(filepath.Ext(header.Filename))
 		validExts := map[string]bool{".svg": true, ".png": true, ".jpg": true, ".jpeg": true, ".webp": true, ".ico": true}
 		if !validExts[ext] {
-			http.Error(w, "Invalid file type. Allowed: svg, png, jpg, jpeg, webp, ico", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid file type. Allowed: svg, png, jpg, jpeg, webp, ico")
 			return
 		}
 
@@ -580,27 +571,26 @@ func AdminIconUploadHandler(app *server.App) http.HandlerFunc {
 		if ext == ".svg" {
 			content, err := io.ReadAll(file)
 			if err != nil {
-				http.Error(w, "Failed to read file", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to read file")
 				return
 			}
 			if err := validateSVGContent(content); err != nil {
-				http.Error(w, "SVG contains potentially unsafe content", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "SVG contains potentially unsafe content")
 				return
 			}
 			dstPath := filepath.Join(app.IconsPath, filename)
 			cleanDst := filepath.Clean(dstPath)
 			cleanBase := filepath.Clean(app.IconsPath)
 			if !strings.HasPrefix(cleanDst, cleanBase) {
-				http.Error(w, "Invalid filename", http.StatusBadRequest)
+				respondError(w, http.StatusBadRequest, "Invalid filename")
 				return
 			}
 			if err := os.WriteFile(dstPath, content, 0644); err != nil {
 				log.Printf("Error writing SVG icon file: %v", err)
-				http.Error(w, "Failed to save icon", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Failed to save icon")
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"filename": filename, "status": "uploaded"})
+			respondJSON(w, http.StatusOK, map[string]string{"filename": filename, "status": "uploaded"})
 			return
 		}
 
@@ -609,13 +599,13 @@ func AdminIconUploadHandler(app *server.App) http.HandlerFunc {
 		cleanDst := filepath.Clean(dstPath)
 		cleanBase := filepath.Clean(app.IconsPath)
 		if !strings.HasPrefix(cleanDst, cleanBase) {
-			http.Error(w, "Invalid filename", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid filename")
 			return
 		}
 		dst, err := os.Create(dstPath)
 		if err != nil {
 			log.Printf("Error creating icon file: %v", err)
-			http.Error(w, "Failed to save icon", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to save icon")
 			return
 		}
 		defer dst.Close()
@@ -623,12 +613,11 @@ func AdminIconUploadHandler(app *server.App) http.HandlerFunc {
 		// Copy file
 		if _, err := io.Copy(dst, file); err != nil {
 			log.Printf("Error writing icon file: %v", err)
-			http.Error(w, "Failed to save icon", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to save icon")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"filename": filename, "status": "uploaded"})
+		respondJSON(w, http.StatusOK, map[string]string{"filename": filename, "status": "uploaded"})
 	}
 }
 
@@ -645,7 +634,7 @@ var (
 func AdminDashboardIconsHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -653,8 +642,7 @@ func AdminDashboardIconsHandler(app *server.App) http.HandlerFunc {
 		if dashboardIconsCache != nil && time.Since(dashboardIconsCacheTime) < dashboardIconsCacheTTL {
 			cached := dashboardIconsCache
 			dashboardIconsMu.Unlock()
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(cached)
+			respondJSON(w, http.StatusOK, cached)
 			return
 		}
 		dashboardIconsMu.Unlock()
@@ -662,25 +650,25 @@ func AdminDashboardIconsHandler(app *server.App) http.HandlerFunc {
 		resp, err := app.HTTPClient.Get("https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/tree.json")
 		if err != nil {
 			log.Printf("Error fetching dashboard icons index: %v", err)
-			http.Error(w, "Failed to fetch icon index", http.StatusBadGateway)
+			respondError(w, http.StatusBadGateway, "Failed to fetch icon index")
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			http.Error(w, "Failed to fetch icon index", http.StatusBadGateway)
+			respondError(w, http.StatusBadGateway, "Failed to fetch icon index")
 			return
 		}
 
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 5<<20))
 		if err != nil {
-			http.Error(w, "Failed to read icon index", http.StatusBadGateway)
+			respondError(w, http.StatusBadGateway, "Failed to read icon index")
 			return
 		}
 
 		var tree map[string][]string
 		if err := json.Unmarshal(body, &tree); err != nil {
-			http.Error(w, "Failed to parse icon index", http.StatusBadGateway)
+			respondError(w, http.StatusBadGateway, "Failed to parse icon index")
 			return
 		}
 
@@ -698,8 +686,7 @@ func AdminDashboardIconsHandler(app *server.App) http.HandlerFunc {
 		dashboardIconsCacheTime = time.Now()
 		dashboardIconsMu.Unlock()
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(names)
+		respondJSON(w, http.StatusOK, names)
 	}
 }
 
@@ -707,7 +694,7 @@ func AdminDashboardIconsHandler(app *server.App) http.HandlerFunc {
 func AdminIconDownloadHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -715,12 +702,12 @@ func AdminIconDownloadHandler(app *server.App) http.HandlerFunc {
 			Name string `json:"name"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		if req.Name == "" || !validIconName.MatchString(req.Name) {
-			http.Error(w, "Invalid icon name", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid icon name")
 			return
 		}
 
@@ -728,31 +715,31 @@ func AdminIconDownloadHandler(app *server.App) http.HandlerFunc {
 		resp, err := app.HTTPClient.Get(iconURL)
 		if err != nil {
 			log.Printf("Error downloading dashboard icon %s: %v", req.Name, err)
-			http.Error(w, "Failed to download icon", http.StatusBadGateway)
+			respondError(w, http.StatusBadGateway, "Failed to download icon")
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			http.Error(w, "Icon not found", http.StatusNotFound)
+			respondError(w, http.StatusNotFound, "Icon not found")
 			return
 		}
 
 		content, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		if err != nil {
-			http.Error(w, "Failed to read icon", http.StatusBadGateway)
+			respondError(w, http.StatusBadGateway, "Failed to read icon")
 			return
 		}
 
 		ct := resp.Header.Get("Content-Type")
 		if !strings.Contains(ct, "svg") && !strings.Contains(ct, "xml") && !strings.Contains(ct, "octet-stream") {
-			http.Error(w, "Unexpected content type", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Unexpected content type")
 			return
 		}
 
 		if err := validateSVGContent(content); err != nil {
 			log.Printf("Dashboard icon %s failed SVG validation: %v", req.Name, err)
-			http.Error(w, "Icon failed safety validation", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Icon failed safety validation")
 			return
 		}
 
@@ -761,17 +748,16 @@ func AdminIconDownloadHandler(app *server.App) http.HandlerFunc {
 		cleanDst := filepath.Clean(dstPath)
 		cleanBase := filepath.Clean(app.IconsPath)
 		if !strings.HasPrefix(cleanDst, cleanBase) {
-			http.Error(w, "Invalid icon name", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid icon name")
 			return
 		}
 
 		if err := os.WriteFile(dstPath, content, 0644); err != nil {
 			log.Printf("Error saving dashboard icon %s: %v", req.Name, err)
-			http.Error(w, "Failed to save icon", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Failed to save icon")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"filename": filename, "status": "downloaded"})
+		respondJSON(w, http.StatusOK, map[string]string{"filename": filename, "status": "downloaded"})
 	}
 }

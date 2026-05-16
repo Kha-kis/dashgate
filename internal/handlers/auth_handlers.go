@@ -48,19 +48,19 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			if err := app.GetTemplates().ExecuteTemplate(w, "login.html", data); err != nil {
 				log.Printf("Template error: %v", err)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				respondError(w, http.StatusInternalServerError, "Internal Server Error")
 			}
 			return
 		}
 
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		// Handle login POST
 		if app.DB == nil {
-			http.Error(w, "Database not available", http.StatusServiceUnavailable)
+			respondError(w, http.StatusServiceUnavailable, "Database not available")
 			return
 		}
 
@@ -70,12 +70,12 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		if req.Username == "" || req.Password == "" {
-			http.Error(w, "Username and password required", http.StatusBadRequest)
+			respondError(w, http.StatusBadRequest, "Username and password required")
 			return
 		}
 
@@ -88,26 +88,21 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 		app.SysConfigMu.RUnlock()
 
 		if localEnabled {
-			var passwordHash, email, displayName, groupsJSON string
-			err := app.DB.QueryRow(
-				"SELECT id, password_hash, COALESCE(email, ''), COALESCE(display_name, username), COALESCE(groups, '[]') FROM users WHERE username = ?",
-				req.Username,
-			).Scan(&userID, &passwordHash, &email, &displayName, &groupsJSON)
-
+			user, err := database.GetUserByUsername(app, req.Username)
 			if err == nil {
-				if auth.CheckPassword(req.Password, passwordHash) {
-					// Local auth successful
+				if auth.CheckPassword(req.Password, user.PasswordHash) {
 					var groups []string
-					json.Unmarshal([]byte(groupsJSON), &groups)
+					json.Unmarshal([]byte(user.GroupsJSON), &groups)
 
 					authUser = &models.AuthenticatedUser{
 						Username:    req.Username,
-						DisplayName: displayName,
-						Email:       email,
+						DisplayName: user.DisplayName,
+						Email:       user.Email,
 						Groups:      groups,
 						Source:      "local",
 					}
 					authUser.IsAdmin = auth.CheckIsAdmin(app, authUser.Groups)
+					userID = user.ID
 				}
 			}
 		}
@@ -124,32 +119,22 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 
 				// Create or update local user record for LDAP user using upsert to avoid race conditions
 				groupsJSON, _ := json.Marshal(authUser.Groups)
-				_, err = app.DB.Exec(
-					`INSERT INTO users (username, email, password_hash, display_name, groups)
-					 VALUES (?, ?, 'LDAP_USER', ?, ?)
-					 ON CONFLICT(username) DO UPDATE SET
-					   email = excluded.email,
-					   display_name = excluded.display_name,
-					   groups = excluded.groups,
-					   updated_at = ?`,
-					req.Username, authUser.Email, authUser.DisplayName, string(groupsJSON), time.Now(),
-				)
-				if err != nil {
+				if err := database.UpsertLDAPUser(app, req.Username, authUser.Email, authUser.DisplayName, string(groupsJSON)); err != nil {
 					log.Printf("Failed to upsert LDAP user: %v", err)
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					respondError(w, http.StatusInternalServerError, "Internal server error")
 					return
 				}
-				err = app.DB.QueryRow("SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID)
+				userID, err = database.GetUserIDByUsername(app, req.Username)
 				if err != nil {
 					log.Printf("Failed to retrieve LDAP user ID: %v", err)
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					respondError(w, http.StatusInternalServerError, "Internal server error")
 					return
 				}
 			}
 		}
 
 		if authUser == nil {
-			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+			respondError(w, http.StatusUnauthorized, "Invalid username or password")
 			return
 		}
 
@@ -160,7 +145,7 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 		token, err := auth.GenerateSessionToken()
 		if err != nil {
 			log.Printf("Error generating session token: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 
@@ -171,13 +156,9 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 		app.SysConfigMu.RUnlock()
 
 		expiresAt := time.Now().Add(time.Duration(sessionDuration) * 24 * time.Hour)
-		_, err = app.DB.Exec(
-			"INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)",
-			userID, token, expiresAt,
-		)
-		if err != nil {
+		if err := database.CreateSession(app, userID, token, expiresAt); err != nil {
 			log.Printf("Error creating session: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			respondError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 
@@ -192,8 +173,7 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 			SameSite: http.SameSiteLaxMode,
 		})
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "redirect": "/"})
+		respondJSON(w, http.StatusOK, map[string]string{"status": "ok", "redirect": "/"})
 	}
 }
 
@@ -201,7 +181,7 @@ func LoginHandler(app *server.App) http.HandlerFunc {
 func LogoutHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -214,9 +194,7 @@ func LogoutHandler(app *server.App) http.HandlerFunc {
 		cookie, err := r.Cookie(cookieName)
 		if err == nil && app.DB != nil {
 			// Delete session from database
-			if _, execErr := app.DB.Exec("DELETE FROM sessions WHERE token = ?", cookie.Value); execErr != nil {
-				log.Printf("Error deleting session during logout: %v", execErr)
-			}
+			database.DeleteSession(app, cookie.Value)
 		}
 
 		// Clear cookie
@@ -230,8 +208,7 @@ func LogoutHandler(app *server.App) http.HandlerFunc {
 			SameSite: http.SameSiteLaxMode,
 		})
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
 }
 
@@ -239,18 +216,17 @@ func LogoutHandler(app *server.App) http.HandlerFunc {
 func AuthMeHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
 		user := auth.GetAuthenticatedUser(app, r)
 		if user == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			respondError(w, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		respondJSON(w, http.StatusOK, user)
 	}
 }
 
@@ -258,7 +234,7 @@ func AuthMeHandler(app *server.App) http.HandlerFunc {
 func AuthConfigHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
 
@@ -272,7 +248,6 @@ func AuthConfigHandler(app *server.App) http.HandlerFunc {
 		}
 		app.SysConfigMu.RUnlock()
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cfg)
+		respondJSON(w, http.StatusOK, cfg)
 	}
 }
