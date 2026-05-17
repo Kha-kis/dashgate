@@ -10,6 +10,7 @@ import (
 
 	"dashgate/internal/auth"
 	"dashgate/internal/config"
+	"dashgate/internal/audit"
 	"dashgate/internal/database"
 	"dashgate/internal/server"
 )
@@ -210,7 +211,7 @@ func BackupHandler(app *server.App) http.HandlerFunc {
 		if adminUser != nil {
 			adminName = adminUser.Username
 		}
-		database.LogAudit(app, adminName, "backup_created", fmt.Sprintf("Backup exported with %d users", len(users)), r.RemoteAddr)
+		audit.LogAudit(app, adminName, "backup_created", fmt.Sprintf("Backup exported with %d users", len(users)), r.RemoteAddr)
 
 		// Set headers for file download
 		respondJSON(w, http.StatusOK, backup)
@@ -382,7 +383,7 @@ func RestoreHandler(app *server.App) http.HandlerFunc {
 		if adminUser != nil {
 			adminName = adminUser.Username
 		}
-		database.LogAudit(app, adminName, "backup_restored", fmt.Sprintf("Restored: users=%d, prefs=%d, config=%d", restored["users"], restored["userPreferences"], restored["systemConfig"]), r.RemoteAddr)
+		audit.LogAudit(app, adminName, "backup_restored", fmt.Sprintf("Restored: users=%d, prefs=%d, config=%d", restored["users"], restored["userPreferences"], restored["systemConfig"]), r.RemoteAddr)
 
 		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"status":   "restored",

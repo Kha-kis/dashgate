@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"dashgate/internal/auth"
+	"dashgate/internal/audit"
 	"dashgate/internal/database"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
@@ -160,7 +161,7 @@ func createLocalUser(app *server.App, w http.ResponseWriter, r *http.Request) {
 	if adminUser != nil {
 		adminName = adminUser.Username
 	}
-	database.LogAudit(app, adminName, "user_created", fmt.Sprintf("Created user %q (id=%d)", req.Username, id), r.RemoteAddr)
+	audit.LogAudit(app, adminName, "user_created", fmt.Sprintf("Created user %q (id=%d)", req.Username, id), r.RemoteAddr)
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{"status": "created", "id": id})
 }
@@ -211,7 +212,7 @@ func updateLocalUser(app *server.App, w http.ResponseWriter, r *http.Request, us
 	// Invalidate all sessions for this user since their privileges changed
 	database.InvalidateUserSessions(app, userID)
 
-	database.LogAudit(app, currentUsername, "user_updated", fmt.Sprintf("Updated user id=%d", userID), r.RemoteAddr)
+	audit.LogAudit(app, currentUsername, "user_updated", fmt.Sprintf("Updated user id=%d", userID), r.RemoteAddr)
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
@@ -252,7 +253,7 @@ func deleteLocalUser(app *server.App, w http.ResponseWriter, r *http.Request, us
 		return
 	}
 
-	database.LogAudit(app, currentUsername, "user_deleted", fmt.Sprintf("Deleted user %q (id=%d)", username, userID), r.RemoteAddr)
+	audit.LogAudit(app, currentUsername, "user_deleted", fmt.Sprintf("Deleted user %q (id=%d)", username, userID), r.RemoteAddr)
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -311,7 +312,7 @@ func resetUserPassword(app *server.App, w http.ResponseWriter, r *http.Request, 
 	if adminUser != nil {
 		adminName = adminUser.Username
 	}
-	database.LogAudit(app, adminName, "password_reset", fmt.Sprintf("Reset password for user id=%d", userID), r.RemoteAddr)
+	audit.LogAudit(app, adminName, "password_reset", fmt.Sprintf("Reset password for user id=%d", userID), r.RemoteAddr)
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "password_reset"})
 }

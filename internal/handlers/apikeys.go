@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"dashgate/internal/auth"
+	"dashgate/internal/audit"
 	"dashgate/internal/database"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
@@ -139,7 +140,7 @@ func createAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 	if adminUser != nil {
 		adminName = adminUser.Username
 	}
-	database.LogAudit(app, adminName, "api_key_created", fmt.Sprintf("Created API key %q (id=%d, prefix=%s)", req.Name, id, keyPrefix), r.RemoteAddr)
+	audit.LogAudit(app, adminName, "api_key_created", fmt.Sprintf("Created API key %q (id=%d, prefix=%s)", req.Name, id, keyPrefix), r.RemoteAddr)
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"id":     id,
@@ -179,7 +180,7 @@ func deleteAPIKey(app *server.App, w http.ResponseWriter, r *http.Request) {
 	if adminUser != nil {
 		adminName = adminUser.Username
 	}
-	database.LogAudit(app, adminName, "api_key_deleted", fmt.Sprintf("Deleted API key id=%d", id), r.RemoteAddr)
+	audit.LogAudit(app, adminName, "api_key_deleted", fmt.Sprintf("Deleted API key id=%d", id), r.RemoteAddr)
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

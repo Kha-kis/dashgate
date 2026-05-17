@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strings"
 
+	"dashgate/internal/audit"
 	"dashgate/internal/auth"
 	"dashgate/internal/config"
-	"dashgate/internal/database"
 	"dashgate/internal/imports"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
@@ -44,7 +44,7 @@ func ImportPreviewHandler(app *server.App) http.HandlerFunc {
 		if adminUser != nil {
 			adminName = adminUser.Username
 		}
-		database.LogAudit(app, adminName, "import_previewed", fmt.Sprintf("Previewed %s import: %d apps found", req.Source, len(result.Apps)), r.RemoteAddr)
+		audit.LogAudit(app, adminName, "import_previewed", fmt.Sprintf("Previewed %s import: %d apps found", req.Source, len(result.Apps)), r.RemoteAddr)
 
 		respondJSON(w, http.StatusOK, result)
 	}
@@ -128,7 +128,7 @@ func ImportApplyHandler(app *server.App) http.HandlerFunc {
 		if adminUser != nil {
 			adminName = adminUser.Username
 		}
-		database.LogAudit(app, adminName, "import_applied", fmt.Sprintf("Imported %d apps from %s", imported, req.Source), r.RemoteAddr)
+		audit.LogAudit(app, adminName, "import_applied", fmt.Sprintf("Imported %d apps from %s", imported, req.Source), r.RemoteAddr)
 
 		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"status":   "imported",

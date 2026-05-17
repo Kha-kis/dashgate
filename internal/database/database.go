@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"dashgate/internal/audit"
 	"dashgate/internal/crypto"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
@@ -192,7 +193,7 @@ func InitDatabase(app *server.App) error {
 	app.DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_preferences_username ON user_preferences(username) WHERE username != ''")
 
 	// Create audit log table
-	if err := InitAuditTable(app); err != nil {
+	if err := audit.InitAuditTable(app); err != nil {
 		return fmt.Errorf("failed to create audit_log table: %w", err)
 	}
 

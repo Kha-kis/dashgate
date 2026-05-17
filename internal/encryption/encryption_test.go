@@ -1,4 +1,4 @@
-package database
+package encryption
 
 import (
 	"crypto/rand"
@@ -47,7 +47,6 @@ func TestDecryptPlaintextPassthrough(t *testing.T) {
 	key := generateTestKey(t)
 	plaintext := "legacy-plaintext-value"
 
-	// Values without "enc:" prefix should be returned as-is (backward compatibility)
 	result, err := DecryptValue(key, plaintext)
 	if err != nil {
 		t.Fatalf("DecryptValue failed: %v", err)
@@ -72,7 +71,6 @@ func TestEncryptEmptyString(t *testing.T) {
 func TestEncryptNilKey(t *testing.T) {
 	plaintext := "some-value"
 
-	// Nil key should return plaintext unchanged (graceful degradation)
 	encrypted, err := EncryptValue(nil, plaintext)
 	if err != nil {
 		t.Fatalf("EncryptValue failed: %v", err)
@@ -85,7 +83,6 @@ func TestEncryptNilKey(t *testing.T) {
 func TestDecryptNilKey(t *testing.T) {
 	ciphertext := "enc:somethingencrypted"
 
-	// Nil key should return value unchanged
 	result, err := DecryptValue(nil, ciphertext)
 	if err != nil {
 		t.Fatalf("DecryptValue failed: %v", err)
@@ -99,13 +96,11 @@ func TestEncryptAlreadyEncrypted(t *testing.T) {
 	key := generateTestKey(t)
 	plaintext := "test-password"
 
-	// Encrypt once
 	encrypted, err := EncryptValue(key, plaintext)
 	if err != nil {
 		t.Fatalf("first EncryptValue failed: %v", err)
 	}
 
-	// Encrypting an already encrypted value should return it unchanged
 	doubleEncrypted, err := EncryptValue(key, encrypted)
 	if err != nil {
 		t.Fatalf("second EncryptValue failed: %v", err)
@@ -136,7 +131,6 @@ func TestDecryptWrongKey(t *testing.T) {
 func TestDecryptCorruptedData(t *testing.T) {
 	key := generateTestKey(t)
 
-	// Corrupted base64 after prefix
 	_, err := DecryptValue(key, "enc:notvalidbase64!!!")
 	if err == nil {
 		t.Error("decrypting corrupted data should fail")
@@ -150,12 +144,10 @@ func TestEncryptDifferentNonces(t *testing.T) {
 	encrypted1, _ := EncryptValue(key, plaintext)
 	encrypted2, _ := EncryptValue(key, plaintext)
 
-	// Each encryption should produce different ciphertext due to random nonce
 	if encrypted1 == encrypted2 {
 		t.Error("encrypting the same value twice should produce different ciphertexts")
 	}
 
-	// But both should decrypt to the same plaintext
 	decrypted1, _ := DecryptValue(key, encrypted1)
 	decrypted2, _ := DecryptValue(key, encrypted2)
 	if decrypted1 != plaintext || decrypted2 != plaintext {

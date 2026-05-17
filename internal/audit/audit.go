@@ -1,4 +1,4 @@
-package database
+package audit
 
 import (
 	"log"
@@ -7,7 +7,6 @@ import (
 	"dashgate/internal/server"
 )
 
-// AuditEntry represents a single entry in the audit log.
 type AuditEntry struct {
 	ID        int    `json:"id"`
 	Timestamp string `json:"timestamp"`
@@ -17,7 +16,6 @@ type AuditEntry struct {
 	IP        string `json:"ip"`
 }
 
-// InitAuditTable creates the audit_log table if it does not exist.
 func InitAuditTable(app *server.App) error {
 	_, err := app.DB.Exec(`
 		CREATE TABLE IF NOT EXISTS audit_log (
@@ -34,8 +32,6 @@ func InitAuditTable(app *server.App) error {
 	return err
 }
 
-// LogAudit records an admin action in the audit log.
-// This is fire-and-forget: errors are logged but do not propagate to the caller.
 func LogAudit(app *server.App, username, action, detail, ip string) {
 	if app.DB == nil {
 		return
@@ -49,7 +45,6 @@ func LogAudit(app *server.App, username, action, detail, ip string) {
 	}
 }
 
-// GetAuditLogs returns the most recent audit log entries, up to limit.
 func GetAuditLogs(app *server.App, limit int) ([]AuditEntry, error) {
 	if limit <= 0 {
 		limit = 100

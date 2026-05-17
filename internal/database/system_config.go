@@ -1,7 +1,6 @@
 package database
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net"
@@ -10,11 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"dashgate/internal/encryption"
 	"dashgate/internal/models"
+	"dashgate/internal/oidc"
 	"dashgate/internal/server"
-
-	"github.com/coreos/go-oidc/v3/oidc"
-	"golang.org/x/oauth2"
 )
 
 // LoadSystemConfig reads all key-value pairs from the system_config table
@@ -38,8 +36,8 @@ func LoadSystemConfig(app *server.App) error {
 		found = true
 
 		// Decrypt sensitive values before use
-		if IsSensitiveKey(key) {
-			decrypted, err := DecryptValue(app.EncryptionKey, value)
+		if encryption.IsSensitiveKey(key) {
+			decrypted, err := encryption.DecryptValue(app.EncryptionKey, value)
 			if err != nil {
 				log.Printf("WARNING: failed to decrypt config key %q, using raw value: %v", key, err)
 			} else {
@@ -239,8 +237,8 @@ func SaveSystemConfig(app *server.App) error {
 
 	// Encrypt sensitive values before persisting
 	for key, value := range configs {
-		if IsSensitiveKey(key) && value != "" {
-			encrypted, err := EncryptValue(app.EncryptionKey, value)
+		if encryption.IsSensitiveKey(key) && value != "" {
+			encrypted, err := encryption.EncryptValue(app.EncryptionKey, value)
 			if err != nil {
 				log.Printf("WARNING: failed to encrypt config key %q, storing in plaintext: %v", key, err)
 			} else {
@@ -376,51 +374,11 @@ func ApplySystemConfig(app *server.App) {
 	oidcGroupsClaim := app.SystemConfig.OIDCGroupsClaim
 
 	if oidcEnabled && oidcIssuer != "" && oidcClientID != "" {
-		// Release lock before network call to avoid blocking all config reads
 		app.SysConfigMu.Unlock()
-		InitOIDCProvider(app, oidcIssuer, oidcClientID, oidcClientSecret, oidcRedirectURL, oidcScopes, oidcGroupsClaim)
+		oidc.InitOIDCProvider(app, oidcIssuer, oidcClientID, oidcClientSecret, oidcRedirectURL, oidcScopes, oidcGroupsClaim)
 	} else {
 		app.OIDCProvider = nil
 		app.OAuth2Config = nil
 		app.SysConfigMu.Unlock()
 	}
-}
-
-// InitOIDCProvider initializes the OIDC provider and OAuth2 config.
-// This function performs network I/O and must NOT be called while holding SysConfigMu.
-func InitOIDCProvider(app *server.App, issuer, clientID, clientSecret, redirectURL, scopes, groupsClaim string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	provider, err := oidc.NewProvider(ctx, issuer)
-	if err != nil {
-		log.Printf("Failed to initialize OIDC provider: %v", err)
-		return
-	}
-
-	scopeList := []string{oidc.ScopeOpenID, "profile", "email"}
-	if scopes != "" {
-		scopeList = strings.Split(scopes, " ")
-	}
-
-	oauthConfig := &oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		RedirectURL:  redirectURL,
-		Endpoint:     provider.Endpoint(),
-		Scopes:       scopeList,
-	}
-
-	if groupsClaim == "" {
-		groupsClaim = "groups"
-	}
-
-	// Store results under the lock
-	app.SysConfigMu.Lock()
-	app.OIDCProvider = provider
-	app.OAuth2Config = oauthConfig
-	app.SystemConfig.OIDCGroupsClaim = groupsClaim
-	app.SysConfigMu.Unlock()
-
-	log.Printf("OIDC auth configured: %s", issuer)
 }

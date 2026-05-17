@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"dashgate/internal/auth"
+	"dashgate/internal/audit"
 	"dashgate/internal/database"
 	"dashgate/internal/server"
 )
@@ -188,7 +189,7 @@ func updateSystemConfigHandler(app *server.App, w http.ResponseWriter, r *http.R
 	if adminUser != nil {
 		adminName = adminUser.Username
 	}
-	database.LogAudit(app, adminName, "system_config_updated", "System configuration updated", r.RemoteAddr)
+	audit.LogAudit(app, adminName, "system_config_updated", "System configuration updated", r.RemoteAddr)
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
@@ -208,7 +209,7 @@ func AuditLogHandler(app *server.App) http.HandlerFunc {
 			}
 		}
 
-		entries, err := database.GetAuditLogs(app, limit)
+		entries, err := audit.GetAuditLogs(app, limit)
 		if err != nil {
 			log.Printf("Error fetching audit logs: %v", err)
 			respondError(w, http.StatusInternalServerError, "Failed to fetch audit logs")
