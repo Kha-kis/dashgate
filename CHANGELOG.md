@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-05-27
+
+### Added
+
+- **Configurable clock format (#11)** — toggle between 12h and 24h time display via Settings > Widget Config, persists in localStorage and syncs server-side
+
+## [1.3.0] - 2026-05-15
+
+### Changed
+
+- **Database layer refactored** — split database/ into focused packages
+
+## [1.2.1] - 2026-05-15
+
+### Added
+
+- **Handler tests** — 30 handler tests covering auth, admin users, API keys, and setup flow
+
 ## [1.2.0] - 2026-05-15
 
 ### Added
