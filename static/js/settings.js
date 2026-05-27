@@ -193,6 +193,12 @@
                 tempUnitSelect.value = settings.temperatureUnit || 'fahrenheit';
             }
 
+            // Clock format
+            const timeFormatSelect = document.getElementById('timeFormat');
+            if (timeFormatSelect) {
+                timeFormatSelect.value = settings.timeFormat || '12h';
+            }
+
             // Widget config
             renderWidgetConfig();
 
@@ -298,6 +304,13 @@
                         <option value="celsius" ${settings.temperatureUnit === 'celsius' ? 'selected' : ''}>°C</option>
                     </select>
                 </div>
+                <div class="widget-config-item" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--bg-tertiary);">
+                    <span class="widget-config-label">Clock Format</span>
+                    <select id="timeFormat" class="admin-input" style="font-size: 13px; padding: 4px 8px; width: auto; margin-left: auto;">
+                        <option value="12h" ${(settings.timeFormat || '12h') === '12h' ? 'selected' : ''}>12h</option>
+                        <option value="24h" ${settings.timeFormat === '24h' ? 'selected' : ''}>24h</option>
+                    </select>
+                </div>
             `;
 
             // Attach temperature unit change handler
@@ -307,6 +320,16 @@
                     settings.temperatureUnit = e.target.value;
                     saveSettings();
                     fetchWeather();
+                });
+            }
+
+            // Attach clock format change handler
+            const timeFormatSelect = container.querySelector('#timeFormat');
+            if (timeFormatSelect) {
+                timeFormatSelect.addEventListener('change', (e) => {
+                    settings.timeFormat = e.target.value;
+                    saveSettings();
+                    updateTime();
                 });
             }
         }
@@ -408,6 +431,7 @@
             settings.openInNewTab = defaultSettings.openInNewTab;
             settings.autoRefresh = defaultSettings.autoRefresh;
             settings.temperatureUnit = defaultSettings.temperatureUnit;
+            settings.timeFormat = defaultSettings.timeFormat;
             settings.showCategories = defaultSettings.showCategories;
             applySettings();
             updateSettingsUI();

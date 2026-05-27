@@ -25,6 +25,7 @@
             showCategories: true,
             customCSS: '',
             temperatureUnit: 'fahrenheit',
+            timeFormat: '12h',
             widgetOrder: ['services', 'system', 'weather', 'notes', 'quicklinks'],
             widgetVisibility: { services: true, system: true, weather: true, notes: true, quicklinks: true }
         };
@@ -151,7 +152,8 @@
 
         function updateTime() {
             const now = new Date();
-            document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const hour12 = (settings.timeFormat || '12h') === '12h';
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12 });
             document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
         }
 
