@@ -12,6 +12,7 @@ A self-hosted application gateway for managing and accessing your web services. 
 - **Group-based access control** - Show apps only to users in specific groups
 - **Automatic app discovery** - Discover apps from Docker, Traefik, Nginx, Nginx Proxy Manager, Caddy, and Unraid
 - **Health monitoring** - Background health checks with real-time status indicators
+- **Auto-login redirect** - Unauthenticated requests redirect to login page or OIDC provider; API requests get structured JSON 401 with redirect URL
 - **First-time setup wizard** - Guided configuration on initial deployment
 - **Admin panel** - Manage users, apps, categories, and discovery sources from the UI
 - **LLDAP integration** - Manage users and groups via LLDAP directory
@@ -20,6 +21,7 @@ A self-hosted application gateway for managing and accessing your web services. 
 - **Encryption at rest** - Sensitive configuration values (passwords, secrets) encrypted with AES-256-GCM
 - **Audit logging** - Track admin actions with audit trail
 - **Backup/Restore** - Export and import DashGate configuration
+- **Configurable clock format** - Toggle between 12h and 24h time display via Settings
 - **Customizable themes** - User-selectable accent colors and dark/light mode
 - **Security hardened** - CSP nonce, CSRF protection, rate limiting, HSTS, security headers
 
@@ -40,30 +42,8 @@ docker run -d \
   -e PGID=1000 \
   --restart unless-stopped \
   khak1s/dashgate:latest
-```
 
-Or with Docker Compose:
-
-```yaml
-services:
-  dashgate:
-    image: khak1s/dashgate:latest
-    container_name: dashgate
-    restart: unless-stopped
-    ports:
-      - "1738:1738"
-    volumes:
-      - ./config:/config
-      # Uncomment for Docker auto-discovery:
-      # - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - PUID=1000  # Match your host user ID (run `id` to find it)
-      - PGID=1000  # Match your host group ID
-      - PORT=1738
-```
-
-```bash
-docker-compose up -d
+# Dev builds: ghcr.io/kha-kis/dashgate:dev (multi-arch, pushed on every main commit)
 ```
 
 Visit `http://localhost:1738` and complete the setup wizard.
@@ -102,22 +82,22 @@ $env:STATIC_PATH = ".\static"
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PUID` | `1000` | User ID for file permissions (NAS/Unraid compatibility) |
-| `PGID` | `1000` | Group ID for file permissions (NAS/Unraid compatibility) |
-| `PORT` | `1738` | HTTP server port |
-| `CONFIG_PATH` | `/config/config.yaml` | Path to YAML app configuration |
-| `DB_PATH` | `/config/dashgate.db` | SQLite database path |
-| `ICONS_PATH` | `/config/icons` | Persistent icons directory (bundled icons seeded on first run) |
-| `DEV_MODE` | `false` | Enable live template reloading |
-| `TEMPLATES_PATH` | `/app/templates` | Templates directory (used in dev mode) |
-| `ENCRYPTION_KEY` | (auto-generated) | 64 hex character AES-256 key for encrypting secrets at rest |
-| `LOGIN_RATE_LIMIT` | `5` | Max login attempts per IP per window |
-| `COOKIE_SECURE` | (auto) | Set to `false` to allow cookies over HTTP (useful behind reverse proxies) |
-| `UNRAID_DISCOVERY` | `false` | Enable Unraid container discovery |
-| `UNRAID_URL` | | Unraid server URL (e.g., `http://tower.local`) |
-| `UNRAID_API_KEY` | | Unraid API key for GraphQL access |
+| Variable           | Default               | Description                                                               |
+| ------------------ | --------------------- | ------------------------------------------------------------------------- |
+| `PUID`             | `1000`                | User ID for file permissions (NAS/Unraid compatibility)                   |
+| `PGID`             | `1000`                | Group ID for file permissions (NAS/Unraid compatibility)                  |
+| `PORT`             | `1738`                | HTTP server port                                                          |
+| `CONFIG_PATH`      | `/config/config.yaml` | Path to YAML app configuration                                            |
+| `DB_PATH`          | `/config/dashgate.db` | SQLite database path                                                      |
+| `ICONS_PATH`       | `/config/icons`       | Persistent icons directory (bundled icons seeded on first run)            |
+| `DEV_MODE`         | `false`               | Enable live template reloading                                            |
+| `TEMPLATES_PATH`   | `/app/templates`      | Templates directory (used in dev mode)                                    |
+| `ENCRYPTION_KEY`   | (auto-generated)      | 64 hex character AES-256 key for encrypting secrets at rest               |
+| `LOGIN_RATE_LIMIT` | `5`                   | Max login attempts per IP per window                                      |
+| `COOKIE_SECURE`    | (auto)                | Set to `false` to allow cookies over HTTP (useful behind reverse proxies) |
+| `UNRAID_DISCOVERY` | `false`               | Enable Unraid container discovery                                         |
+| `UNRAID_URL`       |                       | Unraid server URL (e.g., `http://tower.local`)                            |
+| `UNRAID_API_KEY`   |                       | Unraid API key for GraphQL access                                         |
 
 ### App Catalog (`config.yaml`)
 
@@ -152,6 +132,7 @@ categories:
 ```
 
 Each app supports:
+
 - `name` - Display name
 - `url` - Application URL
 - `icon` - Icon name (matches files in static/icons/) or URL
@@ -228,7 +209,7 @@ services:
   socket-proxy:
     image: tecnativa/docker-socket-proxy
     environment:
-      - CONTAINERS=1  # Only allow container listing
+      - CONTAINERS=1 # Only allow container listing
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
@@ -261,6 +242,7 @@ Enable with `CADDY_DISCOVERY=true` and `CADDY_ADMIN_URL=http://localhost:2019`. 
 Enable with `UNRAID_DISCOVERY=true`, `UNRAID_URL`, and `UNRAID_API_KEY`. Discovers Docker containers with WebUI URLs configured via the Unraid GraphQL API (requires Unraid 7.2+).
 
 To create an API key on your Unraid server:
+
 ```bash
 unraid-api apikey --name "DashGate" --create --roles ADMIN --json
 ```
@@ -270,6 +252,7 @@ Or configure via the admin UI under Discovery settings — enter your Unraid ser
 ### Managing Discovered Apps
 
 Discovered apps are hidden by default. Use the admin panel to:
+
 - Show/hide discovered apps on the DashGate dashboard
 - Override names, icons, URLs, and descriptions
 - Assign groups and categories
@@ -294,50 +277,51 @@ All API endpoints return JSON. State-changing requests require a `X-CSRF-Token` 
 
 ### Public Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check (returns version) |
-| `GET` | `/api/auth/config` | Enabled auth methods |
+| Method | Path               | Description                                                                             |
+| ------ | ------------------ | --------------------------------------------------------------------------------------- |
+| `GET`  | `/health`          | Health check (returns version; returns JSON 401 with redirect URL when unauthenticated) |
+| `GET`  | `/api/auth/config` | Enabled auth methods                                                                    |
 
 ### Authenticated Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/auth/me` | Current user info |
-| `POST` | `/api/auth/logout` | End session |
-| `GET` | `/api/health` | App health statuses |
-| `GET/PUT` | `/api/user/preferences` | User theme preferences |
-| `GET` | `/api/discovered-apps` | List discovered apps |
-| `GET` | `/api/dependencies` | Service dependency graph |
+| Method    | Path                    | Description              |
+| --------- | ----------------------- | ------------------------ |
+| `GET`     | `/api/auth/me`          | Current user info        |
+| `POST`    | `/api/auth/logout`      | End session              |
+| `GET`     | `/api/health`           | App health statuses      |
+| `GET/PUT` | `/api/user/preferences` | User theme preferences   |
+| `GET`     | `/api/discovered-apps`  | List discovered apps     |
+| `GET`     | `/api/dependencies`     | Service dependency graph |
 
 ### Admin Endpoints
 
 All require admin group membership.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/admin/check` | Verify admin access |
-| `GET/POST` | `/api/admin/local-users` | List/create local users |
-| `PUT/DELETE` | `/api/admin/local-users/:id` | Update/delete user |
-| `POST` | `/api/admin/local-users/:id/password` | Reset password |
-| `GET/POST` | `/api/admin/api-keys` | List/create API keys |
-| `GET/PUT` | `/api/admin/system-config` | Get/update system config |
-| `GET/POST` | `/api/admin/config/apps` | Manage app catalog |
-| `GET/POST` | `/api/admin/config/categories` | Manage categories |
-| `GET` | `/api/admin/config/icons` | List available icons |
-| `POST` | `/api/admin/config/icons/upload` | Upload custom icon |
-| `GET/POST` | `/api/admin/docker-discovery` | Docker discovery config |
-| `GET/POST` | `/api/admin/traefik-discovery` | Traefik discovery config |
-| `GET/POST` | `/api/admin/nginx-discovery` | Nginx discovery config |
-| `GET/POST` | `/api/admin/npm-discovery` | NPM discovery config |
-| `GET/POST` | `/api/admin/caddy-discovery` | Caddy discovery config |
-| `GET/POST/PUT` | `/api/admin/unraid-discovery` | Unraid discovery config |
-| `POST` | `/api/admin/unraid-discovery/test` | Test Unraid connection |
-| `GET` | `/api/admin/backup` | Download backup |
-| `POST` | `/api/admin/restore` | Restore from backup |
-| `GET` | `/api/admin/audit-log` | View audit log |
-| `GET` | `/api/admin/users` | List LLDAP users |
-| `GET` | `/api/admin/groups` | List LLDAP groups |
+| Method         | Path                                  | Description                                              |
+| -------------- | ------------------------------------- | -------------------------------------------------------- |
+| `GET`          | `/api/admin/apps`                     | List all apps (config + discovered, deduplicated by URL) |
+| `GET`          | `/api/admin/check`                    | Verify admin access                                      |
+| `GET/POST`     | `/api/admin/local-users`              | List/create local users                                  |
+| `PUT/DELETE`   | `/api/admin/local-users/:id`          | Update/delete user                                       |
+| `POST`         | `/api/admin/local-users/:id/password` | Reset password                                           |
+| `GET/POST`     | `/api/admin/api-keys`                 | List/create API keys                                     |
+| `GET/PUT`      | `/api/admin/system-config`            | Get/update system config                                 |
+| `GET/POST`     | `/api/admin/config/apps`              | Manage app catalog                                       |
+| `GET/POST`     | `/api/admin/config/categories`        | Manage categories                                        |
+| `GET`          | `/api/admin/config/icons`             | List available icons                                     |
+| `POST`         | `/api/admin/config/icons/upload`      | Upload custom icon                                       |
+| `GET/POST`     | `/api/admin/docker-discovery`         | Docker discovery config                                  |
+| `GET/POST`     | `/api/admin/traefik-discovery`        | Traefik discovery config                                 |
+| `GET/POST`     | `/api/admin/nginx-discovery`          | Nginx discovery config                                   |
+| `GET/POST`     | `/api/admin/npm-discovery`            | NPM discovery config                                     |
+| `GET/POST`     | `/api/admin/caddy-discovery`          | Caddy discovery config                                   |
+| `GET/POST/PUT` | `/api/admin/unraid-discovery`         | Unraid discovery config                                  |
+| `POST`         | `/api/admin/unraid-discovery/test`    | Test Unraid connection                                   |
+| `GET`          | `/api/admin/backup`                   | Download backup                                          |
+| `POST`         | `/api/admin/restore`                  | Restore from backup                                      |
+| `GET`          | `/api/admin/audit-log`                | View audit log                                           |
+| `GET`          | `/api/admin/users`                    | List LLDAP users                                         |
+| `GET`          | `/api/admin/groups`                   | List LLDAP groups                                        |
 
 ## Security
 
