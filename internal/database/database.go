@@ -192,6 +192,17 @@ func InitDatabase(app *server.App) error {
 	}
 	app.DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_preferences_username ON user_preferences(username) WHERE username != ''")
 
+	// Create managed_groups table
+	if _, err := app.DB.Exec(`
+		CREATE TABLE IF NOT EXISTS managed_groups (
+			name TEXT PRIMARY KEY,
+			display_name TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create managed_groups table: %w", err)
+	}
+
 	// Create audit log table
 	if err := audit.InitAuditTable(app); err != nil {
 		return fmt.Errorf("failed to create audit_log table: %w", err)

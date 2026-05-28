@@ -220,6 +220,10 @@ func main() {
 	// User preferences
 	mux.HandleFunc("/api/user/preferences", handlers.UserPreferencesHandler(app))
 
+	// User self-service (profile, password)
+	mux.HandleFunc("/api/user/profile", auth.RequireAuth(app, handlers.UserProfileHandler(app)))
+	mux.HandleFunc("/api/user/password", auth.RequireAuth(app, handlers.UserPasswordHandler(app)))
+
 	// OIDC routes
 	mux.HandleFunc("/auth/oidc", auth.OIDCAuthHandler(app))
 	mux.HandleFunc("/auth/oidc/callback", auth.OIDCCallbackHandler(app))
@@ -243,6 +247,10 @@ func main() {
 	// Local user management
 	mux.HandleFunc("/api/admin/local-users", auth.RequireAdmin(app, handlers.LocalUsersHandler(app)))
 	mux.HandleFunc("/api/admin/local-users/", auth.RequireAdmin(app, handlers.LocalUserHandler(app)))
+
+	// Managed groups
+	mux.HandleFunc("/api/admin/managed-groups", auth.RequireAdmin(app, handlers.AdminManagedGroupsHandler(app)))
+	mux.HandleFunc("/api/admin/managed-groups/", auth.RequireAdmin(app, handlers.AdminManagedGroupHandler(app)))
 
 	// App configuration CRUD
 	mux.HandleFunc("/api/admin/config/apps", auth.RequireAdmin(app, handlers.AdminConfigAppsHandler(app)))

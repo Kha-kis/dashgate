@@ -14,13 +14,15 @@ A self-hosted application gateway for managing and accessing your web services. 
 - **Health monitoring** - Background health checks with real-time status indicators
 - **Auto-login redirect** - Unauthenticated requests redirect to login page or OIDC provider; API requests get structured JSON 401 with redirect URL
 - **First-time setup wizard** - Guided configuration on initial deployment
-- **Admin panel** - Manage users, apps, categories, and discovery sources from the UI
+- **Admin panel** - Manage users, apps, categories, groups, and discovery sources from the UI
+- **Group management** - Create and delete managed groups with server-side persistence via admin panel
 - **LLDAP integration** - Manage users and groups via LLDAP directory
 - **API key authentication** - Programmatic access with scoped API keys
 - **Progressive Web App** - Install as a PWA with offline support
 - **Encryption at rest** - Sensitive configuration values (passwords, secrets) encrypted with AES-256-GCM
 - **Audit logging** - Track admin actions with audit trail
 - **Backup/Restore** - Export and import DashGate configuration
+- **User self-service** - Edit profile (display name, email) and change password via Settings > Profile tab
 - **Configurable clock format** - Toggle between 12h and 24h time display via Settings
 - **Customizable themes** - User-selectable accent colors and dark/light mode
 - **Security hardened** - CSP nonce, CSRF protection, rate limiting, HSTS, security headers
@@ -284,14 +286,16 @@ All API endpoints return JSON. State-changing requests require a `X-CSRF-Token` 
 
 ### Authenticated Endpoints
 
-| Method    | Path                    | Description              |
-| --------- | ----------------------- | ------------------------ |
-| `GET`     | `/api/auth/me`          | Current user info        |
-| `POST`    | `/api/auth/logout`      | End session              |
-| `GET`     | `/api/health`           | App health statuses      |
-| `GET/PUT` | `/api/user/preferences` | User theme preferences   |
-| `GET`     | `/api/discovered-apps`  | List discovered apps     |
-| `GET`     | `/api/dependencies`     | Service dependency graph |
+| Method    | Path                    | Description                        |
+| --------- | ----------------------- | ---------------------------------- |
+| `GET`     | `/api/auth/me`          | Current user info                  |
+| `POST`    | `/api/auth/logout`      | End session                        |
+| `GET`     | `/api/health`           | App health statuses                |
+| `GET/PUT` | `/api/user/preferences` | User theme preferences             |
+| `GET/PUT` | `/api/user/profile`     | User profile (display name, email) |
+| `POST`    | `/api/user/password`    | Change password (local users only) |
+| `GET`     | `/api/discovered-apps`  | List discovered apps               |
+| `GET`     | `/api/dependencies`     | Service dependency graph           |
 
 ### Admin Endpoints
 
@@ -322,6 +326,8 @@ All require admin group membership.
 | `GET`          | `/api/admin/audit-log`                | View audit log                                           |
 | `GET`          | `/api/admin/users`                    | List LLDAP users                                         |
 | `GET`          | `/api/admin/groups`                   | List LLDAP groups                                        |
+| `GET/POST`     | `/api/admin/managed-groups`           | List/create managed groups                               |
+| `DELETE`       | `/api/admin/managed-groups/{name}`    | Delete a managed group                                   |
 
 ## Security
 

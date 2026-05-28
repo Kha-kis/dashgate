@@ -10,6 +10,7 @@ let adminState = {
   users: [],
   groups: [],
   localUsers: [],
+  managedGroups: [],
   apps: [],
   categories: [],
   icons: [],
@@ -81,6 +82,17 @@ async function loadAdminData() {
         adminState.localUsers = (await localUsersResp.json()) || [];
         renderLocalUsersList();
       }
+
+      // Load managed groups from server
+      const managedGroupsResp = await fetch("/api/admin/managed-groups", {
+        credentials: "include",
+      });
+      if (managedGroupsResp.ok) {
+        adminState.managedGroups = (await managedGroupsResp.json()) || [];
+      } else {
+        adminState.managedGroups = [];
+      }
+
       document.getElementById("localGroupsSection").style.display = "";
       renderLocalGroupsList();
     }

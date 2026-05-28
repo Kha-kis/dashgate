@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-05-28
+
+### Added
+
+- **User self-service profile** — users can edit their display name and email, and change their password (local accounts only) via Settings > Profile tab. Backend: `GET/PUT /api/user/profile`, `POST /api/user/password`.
+- **Server-side group management** — managed groups stored in database instead of localStorage. Admins create/delete groups via admin panel with server-side persistence. Backend: `GET/POST /api/admin/managed-groups`, `DELETE /api/admin/managed-groups/{name}`.
+
+### Fixed
+
+- **Flaky e2e test** — `category management` test now waits for categories to load before counting.
+
 ## [1.4.0] - 2026-05-28
 
 ### Added
