@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-05-28
+
+### Added
+
+- **Auto-login redirect** — unauthenticated browser requests redirect to login page or OIDC provider; API requests get JSON 401 with redirect URL. Skips redirect during first-time setup.
+- **Discovered apps in admin API** — GET `/api/admin/apps` now returns both config and discovered apps with `source` and `hidden` fields, deduplicated by URL.
+- **Health API JSON** — unauthorized health API calls now return structured JSON with redirect URL instead of plain text.
+- **CI dev images** — multi-arch (amd64/arm64) Docker image pushed to `ghcr.io/kha-kis/dashgate:dev` on every push to main.
+
+### Changed
+
+- **Test port** — e2e tests now use port 1740 to avoid conflict with running production instances.
+
 ## [1.3.1] - 2026-05-27
 
 ### Added
