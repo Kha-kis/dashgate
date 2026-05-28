@@ -65,12 +65,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Lowercase image repo
+        id: img
+        run: echo "ghcr=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/${{ github.repository }}
+            ghcr.io/${{ steps.img.outputs.ghcr }}
             khak1s/dashgate
           tags: |
             type=semver,pattern={{version}}
