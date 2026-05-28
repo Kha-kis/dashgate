@@ -282,11 +282,12 @@ func main() {
 	mux.HandleFunc("/api/admin/import/preview", auth.RequireAdmin(app, handlers.ImportPreviewHandler(app)))
 	mux.HandleFunc("/api/admin/import/apply", auth.RequireAdmin(app, handlers.ImportApplyHandler(app)))
 
-	// Apply middleware chain: body size limit → rate limiting → CSRF → security headers
-	bodySizeLimited := middleware.MaxBodySize(1<<20, mux) // 1 MB max request body
+	// Apply middleware chain: auto-login redirect → body size limit → rate limiting → CSRF → security headers
+	bodySizeLimited := middleware.MaxBodySize(1<<20, mux)
 	rateLimited := loginLimiter.LimitPath([]string{"/api/auth/login", "/login"}, bodySizeLimited)
 	csrfProtected := middleware.CSRFProtection(rateLimited)
-	handler := middleware.SecurityHeaders(csrfProtected)
+	securityHeaders := middleware.SecurityHeaders(csrfProtected)
+	handler := middleware.AutoLoginRedirect(app, securityHeaders)
 
 	port := os.Getenv("PORT")
 	if port == "" {

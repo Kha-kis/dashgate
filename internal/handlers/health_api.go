@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"dashgate/internal/auth"
+	"dashgate/internal/middleware"
 	"dashgate/internal/server"
 )
 
@@ -12,7 +14,12 @@ func DependenciesHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.GetAuthenticatedUser(app, r)
 		if user == nil {
-			respondError(w, http.StatusUnauthorized, "Unauthorized")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error":    "unauthorized",
+				"redirect": middleware.GetAuthRedirectURL(app),
+			})
 			return
 		}
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"dashgate/internal/config"
+	"dashgate/internal/discovery"
 	"dashgate/internal/health"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
@@ -25,7 +26,7 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			// Return full app config with all details
+			// Return full app config with all details (both config + discovered)
 			type FullApp struct {
 				Name        string   `json:"name"`
 				URL         string   `json:"url"`
@@ -33,6 +34,8 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 				Description string   `json:"description"`
 				Groups      []string `json:"groups"`
 				Category    string   `json:"category"`
+				Source      string   `json:"source"`
+				Hidden      bool     `json:"hidden,omitempty"`
 			}
 
 			app.ConfigMu.RLock()
@@ -46,10 +49,42 @@ func AdminConfigAppsHandler(app *server.App) http.HandlerFunc {
 						Description: a.Description,
 						Groups:      a.Groups,
 						Category:    cat.Name,
+						Source:      "config",
 					})
 				}
 			}
 			app.ConfigMu.RUnlock()
+
+			configURLs := make(map[string]bool)
+			for _, a := range apps {
+				configURLs[a.URL] = true
+			}
+
+			rawDiscovered := discovery.GetAllRawDiscoveredApps(app)
+			for _, dApp := range rawDiscovered {
+				if !configURLs[dApp.URL] {
+					category := "Discovered"
+					if dApp.Override != nil && dApp.Override.Category != "" {
+						category = dApp.Override.Category
+					}
+
+					apps = append(apps, FullApp{
+						Name:        dApp.Name,
+						URL:         dApp.URL,
+						Icon:        dApp.Icon,
+						Description: dApp.Description,
+						Groups: func() []string {
+							if dApp.Override != nil {
+								return dApp.Override.Groups
+							}
+							return []string{}
+						}(),
+						Category: category,
+						Source:   dApp.Source,
+						Hidden:   dApp.Override != nil && dApp.Override.Hidden,
+					})
+				}
+			}
 
 			respondJSON(w, http.StatusOK, apps)
 
