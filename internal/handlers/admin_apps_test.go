@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"dashgate/internal/models"
 	"dashgate/internal/server"
 )
 
@@ -148,6 +149,154 @@ func TestAdminIconDownloadHandler(t *testing.T) {
 			t.Errorf("file content mismatch")
 		}
 	})
+}
+
+func TestAdminConfigAppsHandler_GetReturnsSourceField(t *testing.T) {
+	app := setupTestAppWithDB(t)
+
+	// Add a config app
+	app.ConfigMu.Lock()
+	app.Config.Categories = []models.Category{{
+		Name: "Tools",
+		Apps: []models.App{{
+			Name: "ConfigApp",
+			URL:  "https://config.local",
+			Icon: "config.svg",
+		}},
+	}}
+	app.ConfigMu.Unlock()
+
+	// Initialize discovery managers (not done by setupTestAppWithDB)
+	app.DockerDiscovery = server.NewDiscoveryManager()
+	app.TraefikDiscovery = server.NewDiscoveryManager()
+	app.NginxDiscovery = server.NewDiscoveryManager()
+	app.NPMDiscovery = server.NewDiscoveryManager()
+	app.CaddyDiscovery = server.NewDiscoveryManager()
+	app.UnraidDiscovery = server.NewDiscoveryManager()
+	app.DiscoveredOverrides = make(map[string]*models.DiscoveredAppOverride)
+
+	// Add a discovered app via Docker discovery
+	app.DockerDiscovery.Enabled = true
+	app.DockerDiscovery.SetApps([]models.App{{
+		Name: "DiscoveredApp",
+		URL:  "https://discovered.local",
+		Icon: "discovered.svg",
+	}})
+
+	handler := AdminConfigAppsHandler(app)
+	req := newGet("/api/admin/config/apps")
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var apps []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &apps); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	var configApp, discoveredApp map[string]interface{}
+	for _, a := range apps {
+		switch a["url"] {
+		case "https://config.local":
+			configApp = a
+		case "https://discovered.local":
+			discoveredApp = a
+		}
+	}
+
+	if configApp == nil {
+		t.Fatal("config app not found in response")
+	}
+	if configApp["source"] != "config" {
+		t.Errorf("config app source = %v, want 'config'", configApp["source"])
+	}
+
+	if discoveredApp == nil {
+		t.Fatal("discovered app not found in response")
+	}
+	if discoveredApp["source"] != "docker" {
+		t.Errorf("discovered app source = %v, want 'docker'", discoveredApp["source"])
+	}
+}
+
+func TestAdminConfigAppsHandler_PutDiscoveredAppReturns404(t *testing.T) {
+	app := setupTestAppWithDB(t)
+
+	app.DockerDiscovery = server.NewDiscoveryManager()
+	app.TraefikDiscovery = server.NewDiscoveryManager()
+	app.NginxDiscovery = server.NewDiscoveryManager()
+	app.NPMDiscovery = server.NewDiscoveryManager()
+	app.CaddyDiscovery = server.NewDiscoveryManager()
+	app.UnraidDiscovery = server.NewDiscoveryManager()
+	app.DiscoveredOverrides = make(map[string]*models.DiscoveredAppOverride)
+
+	// Add a discovered app via Docker discovery
+	app.DockerDiscovery.Enabled = true
+	app.DockerDiscovery.SetApps([]models.App{{
+		Name: "DiscoveredApp",
+		URL:  "https://discovered.local",
+	}})
+
+	handler := AdminConfigAppsHandler(app)
+
+	// Try to PUT a discovered app via the config/apps endpoint
+	body := map[string]interface{}{
+		"originalUrl": "https://discovered.local",
+		"name":        "UpdatedName",
+		"url":         "https://discovered.local",
+		"category":    "Tools",
+	}
+	req := newPut("/api/admin/config/apps", body)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for PUT on discovered app, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] != "App not found" {
+		t.Errorf("expected 'App not found', got %v", resp["error"])
+	}
+}
+
+func TestAdminConfigAppsHandler_DeleteDiscoveredAppReturns404(t *testing.T) {
+	app := setupTestAppWithDB(t)
+
+	app.DockerDiscovery = server.NewDiscoveryManager()
+	app.TraefikDiscovery = server.NewDiscoveryManager()
+	app.NginxDiscovery = server.NewDiscoveryManager()
+	app.NPMDiscovery = server.NewDiscoveryManager()
+	app.CaddyDiscovery = server.NewDiscoveryManager()
+	app.UnraidDiscovery = server.NewDiscoveryManager()
+	app.DiscoveredOverrides = make(map[string]*models.DiscoveredAppOverride)
+
+	// Add a discovered app via Docker discovery
+	app.DockerDiscovery.Enabled = true
+	app.DockerDiscovery.SetApps([]models.App{{
+		Name: "DiscoveredApp",
+		URL:  "https://discovered.local",
+	}})
+
+	handler := AdminConfigAppsHandler(app)
+
+	req := newDelete("/api/admin/config/apps?url=https://discovered.local")
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for DELETE on discovered app, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] != "App not found" {
+		t.Errorf("expected 'App not found', got %v", resp["error"])
+	}
 }
 
 func TestValidIconNameRegex(t *testing.T) {
