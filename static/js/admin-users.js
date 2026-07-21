@@ -233,60 +233,27 @@ function populateLocalUserGroups(selectedGroups) {
     .join("");
 }
 
-        function renderLocalGroupsList() {
-            const container = document.getElementById('localGroupsList');
-            if (!container) return;
-            const allGroups = getLocalGroups();
-            const managedNames = new Set((adminState.managedGroups || []).map(g => g.name));
-            const lldapNames = new Set((adminState.groups || []).map(g => g.displayName));
+function renderLocalGroupsList() {
+  const container = document.getElementById("localGroupsList");
+  if (!container) return;
+  const allGroups = getLocalGroups();
+  const managedNames = new Set(
+    (adminState.managedGroups || []).map((g) => g.name),
+  );
+  const lldapNames = new Set(
+    (adminState.groups || []).map((g) => g.displayName),
+  );
 
-            const counts = {};
-            allGroups.forEach(g => counts[g] = 0);
-            if (adminState.localUsers) {
-                adminState.localUsers.forEach(u => {
-                    if (u.groups) u.groups.forEach(g => {
-                        if (counts[g] !== undefined) counts[g]++;
-                    });
-                });
-            }
-
-            if (allGroups.length === 0) {
-                container.innerHTML = '<div class="admin-empty">No groups yet</div>';
-                return;
-            }
-
-            container.innerHTML = allGroups.map(group => {
-                const isDefault = group === 'admin' || group === 'users';
-                const isManaged = managedNames.has(group);
-                const isLldap = lldapNames.has(group) && !isManaged;
-                let badge = '';
-                let deleteBtn = '';
-                if (isDefault) {
-                    badge = '<span class="admin-readonly-badge" style="font-size:10px;">built-in</span>';
-                } else if (isLldap) {
-                    badge = '<span class="admin-readonly-badge" style="font-size:10px;">LLDAP</span>';
-                } else if (isManaged) {
-                    deleteBtn = `<button class="admin-action-btn danger" onclick="removeLocalGroup('${escapeHtml(group).replace(/'/g, "\\'")}')" title="Remove group">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                        </svg>
-                    </button>`;
-                } else {
-                    // Orphan group (exists on users but not in any source)
-                    badge = '<span class="admin-readonly-badge" style="font-size:10px;">in use</span>';
-                }
-                return `
-                <div class="admin-item" style="padding:10px 12px;">
-                    <div class="admin-item-info" style="flex:1;">
-                        <div class="admin-item-name">${escapeHtml(group)}</div>
-                        <div class="admin-item-meta">${counts[group] || 0} user${counts[group] !== 1 ? 's' : ''}</div>
-                    </div>
-                    ${badge}
-                    ${deleteBtn}
-                </div>`;
-            }).join('');
-        }
+  const counts = {};
+  allGroups.forEach((g) => (counts[g] = 0));
+  if (adminState.localUsers) {
+    adminState.localUsers.forEach((u) => {
+      if (u.groups)
+        u.groups.forEach((g) => {
+          if (counts[g] !== undefined) counts[g]++;
+        });
+    });
+  }
 
   if (allGroups.length === 0) {
     container.innerHTML = '<div class="admin-empty">No groups yet</div>';
@@ -296,89 +263,75 @@ function populateLocalUserGroups(selectedGroups) {
   container.innerHTML = allGroups
     .map((group) => {
       const isDefault = group === "admin" || group === "users";
-      const isCustom = custom.includes(group);
+      const isManaged = managedNames.has(group);
+      const isLldap = lldapNames.has(group) && !isManaged;
+      let badge = "";
+      let deleteBtn = "";
+      if (isDefault) {
+        badge =
+          '<span class="admin-readonly-badge" style="font-size:10px;">built-in</span>';
+      } else if (isLldap) {
+        badge =
+          '<span class="admin-readonly-badge" style="font-size:10px;">LLDAP</span>';
+      } else if (isManaged) {
+        deleteBtn = `<button class="admin-action-btn danger" onclick="removeLocalGroup('${escapeHtml(group).replace(/'/g, "\\'")}')" title="Remove group">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                        </svg>
+                    </button>`;
+      } else {
+        // Orphan group (exists on users but not in any source)
+        badge =
+          '<span class="admin-readonly-badge" style="font-size:10px;">in use</span>';
+      }
       return `
                 <div class="admin-item" style="padding:10px 12px;">
                     <div class="admin-item-info" style="flex:1;">
                         <div class="admin-item-name">${escapeHtml(group)}</div>
                         <div class="admin-item-meta">${counts[group] || 0} user${counts[group] !== 1 ? "s" : ""}</div>
                     </div>
-                    ${
-                      !isDefault
-                        ? `<button class="admin-action-btn danger" onclick="removeLocalGroup('${escapeHtml(group).replace(/'/g, "\\'")}')" title="Remove group">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                        </svg>
-                    </button>`
-                        : '<span class="admin-readonly-badge" style="font-size:10px;">built-in</span>'
-                    }
+                    ${badge}
+                    ${deleteBtn}
                 </div>`;
     })
     .join("");
 }
 
-        async function addLocalGroup() {
-            const input = document.getElementById('newLocalGroupInput');
-            const name = input.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-            if (!name) { showToast('Enter a group name'); return; }
+async function addLocalGroup() {
+  const input = document.getElementById("newLocalGroupInput");
+  const name = input.value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "");
+  if (!name) {
+    showToast("Enter a group name");
+    return;
+  }
 
-            const existing = getLocalGroups();
-            if (existing.includes(name)) { showToast('Group already exists'); return; }
-
-            try {
-                const resp = await fetch('/api/admin/managed-groups', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ name })
-                });
-                if (!resp.ok) throw new Error(await resp.text());
-                input.value = '';
-                await reloadManagedGroups();
-                showToast(`Group "${name}" created`);
-            } catch (e) {
-                showToast('Error: ' + e.message);
-            }
-        }
-
-        async function removeLocalGroup(name) {
-            const usersWithGroup = (adminState.localUsers || []).filter(u => u.groups && u.groups.includes(name));
-            if (usersWithGroup.length > 0) {
-                showToast(`Cannot remove: ${usersWithGroup.length} user(s) still in this group`);
-                return;
-            }
-            try {
-                const resp = await fetch(`/api/admin/managed-groups/${encodeURIComponent(name)}`, {
-                    method: 'DELETE',
-                    credentials: 'include'
-                });
-                if (!resp.ok) throw new Error(await resp.text());
-                await reloadManagedGroups();
-                showToast(`Group "${name}" removed`);
-            } catch (e) {
-                showToast('Error: ' + e.message);
-            }
-        }
-
-  const custom = JSON.parse(
-    localStorage.getItem("dashgate-local-groups") || "[]",
-  );
   const existing = getLocalGroups();
   if (existing.includes(name)) {
     showToast("Group already exists");
     return;
   }
 
-  custom.push(name);
-  localStorage.setItem("dashgate-local-groups", JSON.stringify(custom));
-  input.value = "";
-  renderLocalGroupsList();
-  showToast(`Group "${name}" created`);
+  try {
+    const resp = await fetch("/api/admin/managed-groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    input.value = "";
+    await reloadManagedGroups();
+    showToast(`Group "${name}" created`);
+  } catch (e) {
+    showToast("Error: " + e.message);
+  }
 }
 
-function removeLocalGroup(name) {
-  // Check if any users have this group
+async function removeLocalGroup(name) {
   const usersWithGroup = (adminState.localUsers || []).filter(
     (u) => u.groups && u.groups.includes(name),
   );
@@ -388,33 +341,39 @@ function removeLocalGroup(name) {
     );
     return;
   }
-  const custom = JSON.parse(
-    localStorage.getItem("dashgate-local-groups") || "[]",
-  );
-  const idx = custom.indexOf(name);
-  if (idx !== -1) {
-    custom.splice(idx, 1);
-    localStorage.setItem("dashgate-local-groups", JSON.stringify(custom));
+  try {
+    const resp = await fetch(
+      `/api/admin/managed-groups/${encodeURIComponent(name)}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      },
+    );
+    if (!resp.ok) throw new Error(await resp.text());
+    await reloadManagedGroups();
+    showToast(`Group "${name}" removed`);
+  } catch (e) {
+    showToast("Error: " + e.message);
   }
-  renderLocalGroupsList();
-  showToast(`Group "${name}" removed`);
 }
 
-        function closeLocalUserModal() {
-            document.getElementById('localUserModal').classList.remove('open');
-        }
+function closeLocalUserModal() {
+  document.getElementById("localUserModal").classList.remove("open");
+}
 
-        async function reloadManagedGroups() {
-            try {
-                const resp = await fetch('/api/admin/managed-groups', { credentials: 'include' });
-                if (resp.ok) {
-                    adminState.managedGroups = (await resp.json()) || [];
-                }
-            } catch (e) {
-                console.error('Failed to reload managed groups:', e);
-            }
-            renderLocalGroupsList();
-        }
+async function reloadManagedGroups() {
+  try {
+    const resp = await fetch("/api/admin/managed-groups", {
+      credentials: "include",
+    });
+    if (resp.ok) {
+      adminState.managedGroups = (await resp.json()) || [];
+    }
+  } catch (e) {
+    console.error("Failed to reload managed groups:", e);
+  }
+  renderLocalGroupsList();
+}
 
 async function saveLocalUser() {
   const editId = document.getElementById("localUserEditId").value;

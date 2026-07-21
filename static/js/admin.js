@@ -83,7 +83,10 @@ async function loadAdminData() {
         renderLocalUsersList();
       }
 
-      // Load managed groups from server
+      document.getElementById("localGroupsSection").style.display = "";
+      renderLocalGroupsList();
+
+      // Load managed groups from server (async, re-renders when done)
       const managedGroupsResp = await fetch("/api/admin/managed-groups", {
         credentials: "include",
       });
@@ -92,8 +95,6 @@ async function loadAdminData() {
       } else {
         adminState.managedGroups = [];
       }
-
-      document.getElementById("localGroupsSection").style.display = "";
       renderLocalGroupsList();
     }
 

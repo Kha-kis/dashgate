@@ -460,6 +460,14 @@ function updateSettingsUserSection() {
 
 // Profile functions
 async function loadProfile() {
+  // Populate from currentUser immediately for instant feedback
+  if (currentUser) {
+    document.getElementById("profileDisplayName").value =
+      currentUser.displayName || "";
+    document.getElementById("profileEmail").value = currentUser.email || "";
+  }
+
+  // Then fetch fresh data from server
   try {
     const resp = await fetch("/api/user/profile", { credentials: "include" });
     if (resp.ok) {

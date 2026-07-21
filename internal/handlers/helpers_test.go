@@ -106,6 +106,11 @@ func setupTestAppWithDB(t testing.TB) *server.App {
 	);
 	CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 	CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+	CREATE TABLE IF NOT EXISTS managed_groups (
+		name TEXT PRIMARY KEY,
+		display_name TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
