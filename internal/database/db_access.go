@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -180,20 +181,62 @@ func UpsertOIDCUser(app *server.App, username, email, displayName, groupsJSON st
 }
 
 func UpsertProxyUser(app *server.App, username, email, displayName, groupsJSON string) error {
-	_, err := app.DB.Exec(
+	var passwordHash, storedEmail, storedDisplayName, storedGroups string
+	err := app.DB.QueryRow(
+		`SELECT password_hash, COALESCE(email, ''), COALESCE(display_name, ''), COALESCE(groups, '[]')
+		 FROM users WHERE username = ?`, username,
+	).Scan(&passwordHash, &storedEmail, &storedDisplayName, &storedGroups)
+	if err == nil {
+		if passwordHash != "PROXY_USER" {
+			return fmt.Errorf("proxy username %q belongs to another authentication source", username)
+		}
+		if storedEmail == email && storedDisplayName == displayName && storedGroups == groupsJSON {
+			return nil
+		}
+
+		result, err := app.DB.Exec(
+			`UPDATE users SET email = NULLIF(?, ''), display_name = ?, groups = ?, updated_at = ?
+			 WHERE username = ? AND password_hash = 'PROXY_USER'`,
+			email, displayName, groupsJSON, time.Now(), username,
+		)
+		if err != nil {
+			return err
+		}
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if updated == 0 {
+			return fmt.Errorf("proxy user %q changed during authentication", username)
+		}
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+
+	result, err := app.DB.Exec(
 		`INSERT INTO users (username, email, password_hash, display_name, groups)
 		 VALUES (?, NULLIF(?, ''), 'PROXY_USER', ?, ?)
 		 ON CONFLICT(username) DO UPDATE SET
 		   email = excluded.email,
 		   display_name = excluded.display_name,
 		   groups = excluded.groups,
-		   updated_at = ?`,
+		   updated_at = ?
+		 WHERE users.password_hash = 'PROXY_USER'`,
 		username, email, displayName, groupsJSON, time.Now(),
 	)
 	if err != nil {
-		log.Printf("Failed to upsert proxy user: %v", err)
+		return err
 	}
-	return err
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if inserted == 0 {
+		return fmt.Errorf("proxy username %q belongs to another authentication source", username)
+	}
+	return nil
 }
 
 func CreateSession(app *server.App, userID int, token string, expiresAt time.Time) error {

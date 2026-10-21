@@ -68,3 +68,83 @@ func TestProxyUserPreferencesPersistAndStaySeparate(t *testing.T) {
 		t.Fatalf("untrusted proxy user was persisted: %v", err)
 	}
 }
+
+func TestProxyUserCannotOverwriteAnotherAuthSource(t *testing.T) {
+	app := setupTestAppWithDB(t)
+	app.SystemConfig.ProxyAuthEnabled = true
+	app.SystemConfig.TrustedProxies = "127.0.0.1"
+	app.TrustedProxyIPs = []net.IP{net.ParseIP("127.0.0.1")}
+	handler := UserPreferencesHandler(app)
+
+	for _, source := range []string{"local", "LDAP_USER", "OIDC_USER"} {
+		username := "collision-" + source
+		id := seedUser(t, app, username, "password123", username, true)
+		if source != "local" {
+			if _, err := app.DB.Exec("UPDATE users SET password_hash = ? WHERE id = ?", source, id); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		r := httptest.NewRequest(http.MethodPut, "/api/user/preferences", strings.NewReader(`{"settings":{}}`))
+		r.RemoteAddr = "127.0.0.1:12345"
+		r.Header.Set("Remote-User", username)
+		r.Header.Set("Remote-Groups", "users")
+		r.Header.Set("Remote-Name", "Proxy Identity")
+		r.Header.Set("Remote-Email", "proxy@example.test")
+		w := httptest.NewRecorder()
+		handler(w, r)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("%s collision: status %d, want 401", source, w.Code)
+		}
+
+		row, err := database.GetUserByUsername(app, username)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if row.ID != id || row.GroupsJSON != `["admins"]` || row.DisplayName != username || row.Email != username+"@test.local" {
+			t.Errorf("%s account changed: id=%d groups=%s display_name=%s email=%s", source, row.ID, row.GroupsJSON, row.DisplayName, row.Email)
+		}
+	}
+}
+
+func TestProxyUserUnchangedClaimsDoNotWrite(t *testing.T) {
+	app := setupTestAppWithDB(t)
+	app.SystemConfig.ProxyAuthEnabled = true
+	app.SystemConfig.TrustedProxies = "127.0.0.1"
+	app.TrustedProxyIPs = []net.IP{net.ParseIP("127.0.0.1")}
+	handler := UserPreferencesHandler(app)
+
+	request := func(groups string) {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodGet, "/api/user/preferences", nil)
+		r.RemoteAddr = "127.0.0.1:12345"
+		r.Header.Set("Remote-User", "stable-proxy")
+		r.Header.Set("Remote-Groups", groups)
+		w := httptest.NewRecorder()
+		handler(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("proxy GET: status %d, body %s", w.Code, w.Body.String())
+		}
+	}
+
+	request("users")
+	if _, err := app.DB.Exec("UPDATE users SET updated_at = '2000-01-01' WHERE username = 'stable-proxy'"); err != nil {
+		t.Fatal(err)
+	}
+	request("users")
+	var updatedAt, groups string
+	if err := app.DB.QueryRow("SELECT CAST(updated_at AS TEXT), groups FROM users WHERE username = 'stable-proxy'").Scan(&updatedAt, &groups); err != nil {
+		t.Fatal(err)
+	}
+	if updatedAt != "2000-01-01" {
+		t.Errorf("unchanged proxy claims wrote user row: updated_at=%s", updatedAt)
+	}
+
+	request("admins")
+	if err := app.DB.QueryRow("SELECT CAST(updated_at AS TEXT), groups FROM users WHERE username = 'stable-proxy'").Scan(&updatedAt, &groups); err != nil {
+		t.Fatal(err)
+	}
+	if updatedAt == "2000-01-01" || groups != `["admins"]` {
+		t.Errorf("changed proxy claims not saved: updated_at=%s groups=%s", updatedAt, groups)
+	}
+}
