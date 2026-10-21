@@ -181,6 +181,22 @@ func UpsertOIDCUser(app *server.App, username, email, displayName, groupsJSON st
 }
 
 func UpsertProxyUser(app *server.App, username, email, displayName, groupsJSON string) error {
+	// Email is unique across all users, but proxy identities are keyed by username.
+	// Keep a conflicting email on its existing account rather than rejecting auth.
+	storedProxyEmail := email
+	if email != "" {
+		var emailTaken bool
+		if err := app.DB.QueryRow(
+			"SELECT EXISTS(SELECT 1 FROM users WHERE email = ? AND username <> ?)",
+			email, username,
+		).Scan(&emailTaken); err != nil {
+			return err
+		}
+		if emailTaken {
+			storedProxyEmail = ""
+		}
+	}
+
 	var passwordHash, storedEmail, storedDisplayName, storedGroups string
 	err := app.DB.QueryRow(
 		`SELECT password_hash, COALESCE(email, ''), COALESCE(display_name, ''), COALESCE(groups, '[]')
@@ -190,14 +206,17 @@ func UpsertProxyUser(app *server.App, username, email, displayName, groupsJSON s
 		if passwordHash != "PROXY_USER" {
 			return fmt.Errorf("proxy username %q belongs to another authentication source", username)
 		}
-		if storedEmail == email && storedDisplayName == displayName && storedGroups == groupsJSON {
+		if storedEmail == storedProxyEmail && storedDisplayName == displayName && storedGroups == groupsJSON {
 			return nil
 		}
 
 		result, err := app.DB.Exec(
-			`UPDATE users SET email = NULLIF(?, ''), display_name = ?, groups = ?, updated_at = ?
+			`UPDATE users SET email = CASE WHEN EXISTS(
+			   SELECT 1 FROM users WHERE email = ? AND username <> ?
+			 ) THEN NULL ELSE NULLIF(?, '') END,
+			 display_name = ?, groups = ?, updated_at = ?
 			 WHERE username = ? AND password_hash = 'PROXY_USER'`,
-			email, displayName, groupsJSON, time.Now(), username,
+			email, username, email, displayName, groupsJSON, time.Now(), username,
 		)
 		if err != nil {
 			return err
@@ -217,14 +236,16 @@ func UpsertProxyUser(app *server.App, username, email, displayName, groupsJSON s
 
 	result, err := app.DB.Exec(
 		`INSERT INTO users (username, email, password_hash, display_name, groups)
-		 VALUES (?, NULLIF(?, ''), 'PROXY_USER', ?, ?)
+		 VALUES (?, CASE WHEN EXISTS(
+		   SELECT 1 FROM users WHERE email = ? AND username <> ?
+		 ) THEN NULL ELSE NULLIF(?, '') END, 'PROXY_USER', ?, ?)
 		 ON CONFLICT(username) DO UPDATE SET
 		   email = excluded.email,
 		   display_name = excluded.display_name,
 		   groups = excluded.groups,
 		   updated_at = ?
 		 WHERE users.password_hash = 'PROXY_USER'`,
-		username, email, displayName, groupsJSON, time.Now(),
+		username, email, username, email, displayName, groupsJSON, time.Now(),
 	)
 	if err != nil {
 		return err

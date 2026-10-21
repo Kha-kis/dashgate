@@ -148,3 +148,55 @@ func TestProxyUserUnchangedClaimsDoNotWrite(t *testing.T) {
 		t.Errorf("changed proxy claims not saved: updated_at=%s groups=%s", updatedAt, groups)
 	}
 }
+
+func TestProxyUserWithDuplicateEmailCanSavePreferences(t *testing.T) {
+	app := setupTestAppWithDB(t)
+	app.SystemConfig.ProxyAuthEnabled = true
+	app.SystemConfig.TrustedProxies = "127.0.0.1"
+	app.TrustedProxyIPs = []net.IP{net.ParseIP("127.0.0.1")}
+	seedUser(t, app, "local-owner", "password123", "Local Owner", false)
+	handler := UserPreferencesHandler(app)
+
+	request := func() *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodPut, "/api/user/preferences", strings.NewReader(`{"settings":{"theme":"dark"}}`))
+		r.RemoteAddr = "127.0.0.1:12345"
+		r.Header.Set("Remote-User", "proxy-other")
+		r.Header.Set("Remote-Email", "local-owner@test.local")
+		w := httptest.NewRecorder()
+		handler(w, r)
+		return w
+	}
+
+	if w := request(); w.Code != http.StatusOK {
+		t.Fatalf("proxy user with duplicate email: status %d, body %s", w.Code, w.Body.String())
+	}
+	row, err := database.GetUserByUsername(app, "proxy-other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.Email != "" || row.PasswordHash != "PROXY_USER" {
+		t.Errorf("proxy row has unexpected email or source: email=%q source=%q", row.Email, row.PasswordHash)
+	}
+	owner, err := database.GetUserByUsername(app, "local-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner.Email != "local-owner@test.local" {
+		t.Errorf("existing account email changed: %q", owner.Email)
+	}
+
+	if _, err := app.DB.Exec("UPDATE users SET updated_at = '2000-01-01' WHERE username = 'proxy-other'"); err != nil {
+		t.Fatal(err)
+	}
+	if w := request(); w.Code != http.StatusOK {
+		t.Fatalf("repeat proxy request: status %d, body %s", w.Code, w.Body.String())
+	}
+	var updatedAt string
+	if err := app.DB.QueryRow("SELECT CAST(updated_at AS TEXT) FROM users WHERE username = 'proxy-other'").Scan(&updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if updatedAt != "2000-01-01" {
+		t.Errorf("duplicate email caused redundant write: updated_at=%s", updatedAt)
+	}
+}
