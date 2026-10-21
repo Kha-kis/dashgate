@@ -148,7 +148,7 @@ async function syncPreferencesToServer() {
   if (!prefsSyncEnabled) return;
 
   try {
-    await fetch("/api/user/preferences", {
+    const response = await fetch("/api/user/preferences", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -158,6 +158,9 @@ async function syncPreferencesToServer() {
         myApps: myApps,
       }),
     });
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
   } catch (e) {
     console.error("Failed to sync preferences:", e);
   }

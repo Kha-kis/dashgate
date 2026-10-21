@@ -19,23 +19,16 @@ func UserPreferencesHandler(app *server.App) http.HandlerFunc {
 			return
 		}
 
-		// Get user ID from database
-		var userID int
 		userID, err := database.GetUserIDByUsername(app, user.Username)
 		if err != nil {
-			// User might be from LDAP/OIDC, create a preferences record with username as key
-			userID = 0 // Will use username-based lookup
+			log.Printf("Error looking up preference user: %v", err)
+			respondError(w, http.StatusInternalServerError, "Failed to load user")
+			return
 		}
 
 		switch r.Method {
 		case http.MethodGet:
-			var preferences string
-			if userID > 0 {
-				preferences, err = database.GetPreferences(app, userID)
-			} else {
-				// For external users (LDAP/OIDC), use username column lookup
-				preferences, err = database.GetPreferencesByUsername(app, user.Username)
-			}
+			preferences, err := database.GetPreferences(app, userID)
 
 			if err != nil {
 				// Return empty preferences
@@ -55,11 +48,7 @@ func UserPreferencesHandler(app *server.App) http.HandlerFunc {
 
 			prefsJSON, _ := json.Marshal(prefs)
 
-			if userID > 0 {
-				err = database.SavePreferencesByUserID(app, userID, string(prefsJSON))
-			} else {
-				err = database.SavePreferencesByUsername(app, user.Username, string(prefsJSON))
-			}
+			err = database.SavePreferencesByUserID(app, userID, string(prefsJSON))
 
 			if err != nil {
 				log.Printf("Error saving preferences: %v", err)

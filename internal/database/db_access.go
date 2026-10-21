@@ -179,6 +179,23 @@ func UpsertOIDCUser(app *server.App, username, email, displayName, groupsJSON st
 	return err
 }
 
+func UpsertProxyUser(app *server.App, username, email, displayName, groupsJSON string) error {
+	_, err := app.DB.Exec(
+		`INSERT INTO users (username, email, password_hash, display_name, groups)
+		 VALUES (?, NULLIF(?, ''), 'PROXY_USER', ?, ?)
+		 ON CONFLICT(username) DO UPDATE SET
+		   email = excluded.email,
+		   display_name = excluded.display_name,
+		   groups = excluded.groups,
+		   updated_at = ?`,
+		username, email, displayName, groupsJSON, time.Now(),
+	)
+	if err != nil {
+		log.Printf("Failed to upsert proxy user: %v", err)
+	}
+	return err
+}
+
 func CreateSession(app *server.App, userID int, token string, expiresAt time.Time) error {
 	_, err := app.DB.Exec(
 		"INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)",
@@ -288,12 +305,6 @@ func GetPreferences(app *server.App, userID int) (string, error) {
 	return prefs, err
 }
 
-func GetPreferencesByUsername(app *server.App, username string) (string, error) {
-	var prefs string
-	err := app.DB.QueryRow("SELECT preferences FROM user_preferences WHERE username = ?", username).Scan(&prefs)
-	return prefs, err
-}
-
 func SavePreferences(app *server.App, userID int, username string, prefsJSON string) error {
 	_, err := app.DB.Exec(
 		`INSERT OR REPLACE INTO user_preferences (user_id, username, preferences, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
@@ -306,14 +317,6 @@ func SavePreferencesByUserID(app *server.App, userID int, prefsJSON string) erro
 	_, err := app.DB.Exec(
 		`INSERT OR REPLACE INTO user_preferences (user_id, preferences, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
 		userID, prefsJSON,
-	)
-	return err
-}
-
-func SavePreferencesByUsername(app *server.App, username string, prefsJSON string) error {
-	_, err := app.DB.Exec(
-		`INSERT OR REPLACE INTO user_preferences (user_id, username, preferences, updated_at) VALUES (-1, ?, ?, CURRENT_TIMESTAMP)`,
-		username, prefsJSON,
 	)
 	return err
 }
