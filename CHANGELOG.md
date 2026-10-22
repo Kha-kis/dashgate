@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.2] - 2026-10-22
+
+### Fixed
+
+- **Proxy-auth preference persistence (#15)** — trusted proxy users now have separate database records, allowing settings, favorites, and My Apps to sync across browsers and devices without foreign-key failures.
+- **Proxy identity collisions** — proxy authentication rejects usernames already owned by local, LDAP, or OIDC accounts. Duplicate email claims do not overwrite the existing account or prevent the proxy user from signing in.
+- **Preference sync errors** — failed server saves are reported in the browser console instead of being silently ignored.
+
+### Changed
+
+- **API-key preference access** — API keys now receive HTTP 403 for both reads and writes to `/api/user/preferences`; personal preferences require a signed-in user.
+- **Group and profile management** — completed interface polish and added end-to-end coverage for the existing server-side features.
+
+## [1.5.1] - 2026-07-20
+
+### Fixed
+
+- **Manage Apps** — discovered apps are filtered from the configuration app list.
+
 ## [1.5.0] - 2026-05-28
 
 ### Added

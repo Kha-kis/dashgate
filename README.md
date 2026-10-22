@@ -174,6 +174,9 @@ Trust authentication headers from a reverse proxy:
 - `Remote-User`, `Remote-Groups`, `Remote-Name`, `Remote-Email`
 - Configure trusted proxy IP ranges to prevent header spoofing
 - Works with Authelia, Authentik, and similar auth proxies
+- Each trusted proxy username gets its own user record, so settings, favorites, and My Apps sync across browsers and devices
+- A proxy username already used by a local, LDAP, or OIDC account is rejected; use distinct usernames for each authentication source
+- If a proxy email belongs to another account, DashGate leaves that account unchanged and stores the proxy user without an email
 
 ### API Keys
 
@@ -291,13 +294,14 @@ All API endpoints return JSON. State-changing requests require a `X-CSRF-Token` 
 | `GET`     | `/api/auth/me`          | Current user info                  |
 | `POST`    | `/api/auth/logout`      | End session                        |
 | `GET`     | `/api/health`           | App health statuses                |
-| `GET/PUT` | `/api/user/preferences` | User theme preferences             |
+| `GET/PUT` | `/api/user/preferences` | Settings, favorites, My Apps         |
 | `GET/PUT` | `/api/user/profile`     | User profile (display name, email) |
 | `POST`    | `/api/user/password`    | Change password (local users only) |
 | `GET`     | `/api/discovered-apps`  | List discovered apps               |
 | `GET`     | `/api/dependencies`     | Service dependency graph           |
 
 API keys cannot access user preferences; these settings belong to a signed-in user.
+Quick Links, Quick Notes, and the weather location remain local to each browser.
 
 ### Admin Endpoints
 
