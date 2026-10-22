@@ -9,7 +9,51 @@ import (
 	"testing"
 
 	"dashgate/internal/database"
+	"golang.org/x/crypto/bcrypt"
 )
+
+func TestAPIKeyCannotAccessUserPreferences(t *testing.T) {
+	app := setupTestAppWithDB(t)
+	app.SystemConfig.APIKeyEnabled = true
+	handler := UserPreferencesHandler(app)
+
+	seedUser(t, app, "testuser", "password123", "Test User", false)
+	seedKey := func(name, key, username string) {
+		t.Helper()
+		hash, err := bcrypt.GenerateFromPassword([]byte(key), bcrypt.DefaultCost)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := app.DB.Exec(
+			"INSERT INTO api_keys (name, key_hash, key_prefix, username, groups) VALUES (?, ?, ?, ?, ?)",
+			name, hash, key[:8], username, `[]`,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const rowlessKey = "rowless1_full_key"
+	seedKey("rowless", rowlessKey, "api-key")
+	seedKey("matching-user", "matching_full_key", "testuser")
+
+	for _, key := range []string{rowlessKey, "matching_full_key"} {
+		for _, method := range []string{http.MethodGet, http.MethodPut} {
+			r := httptest.NewRequest(method, "/api/user/preferences", strings.NewReader(`{"theme":"dark"}`))
+			r.Header.Set("X-API-Key", key)
+			w := httptest.NewRecorder()
+			handler(w, r)
+			if w.Code != http.StatusForbidden {
+				t.Errorf("%s with key %q: status %d, body %s; want 403", method, key, w.Code, w.Body.String())
+			}
+		}
+	}
+	var preferenceRows int
+	if err := app.DB.QueryRow("SELECT COUNT(*) FROM user_preferences").Scan(&preferenceRows); err != nil {
+		t.Fatal(err)
+	}
+	if preferenceRows != 0 {
+		t.Errorf("API-key requests created %d preference rows", preferenceRows)
+	}
+}
 
 func TestProxyUserPreferencesPersistAndStaySeparate(t *testing.T) {
 	app := setupTestAppWithDB(t)

@@ -18,6 +18,10 @@ func UserPreferencesHandler(app *server.App) http.HandlerFunc {
 			respondError(w, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
+		if user.Source == "apikey" {
+			respondError(w, http.StatusForbidden, "API keys cannot access user preferences")
+			return
+		}
 
 		userID, err := database.GetUserIDByUsername(app, user.Username)
 		if err != nil {
