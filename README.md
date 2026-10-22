@@ -297,6 +297,8 @@ All API endpoints return JSON. State-changing requests require a `X-CSRF-Token` 
 | `GET`     | `/api/discovered-apps`  | List discovered apps               |
 | `GET`     | `/api/dependencies`     | Service dependency graph           |
 
+API keys cannot access user preferences; these settings belong to a signed-in user.
+
 ### Admin Endpoints
 
 All require admin group membership.

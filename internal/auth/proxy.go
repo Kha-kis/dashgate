@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"dashgate/internal/database"
 	"dashgate/internal/models"
 	"dashgate/internal/server"
 )
@@ -79,6 +80,10 @@ func GetAutheliaUser(app *server.App, r *http.Request) *models.AuthenticatedUser
 	}
 
 	email := r.Header.Get("Remote-Email")
+	if err := database.UpsertProxyUser(app, username, email, displayName, database.MarshalListJSON(groups)); err != nil {
+		log.Printf("Failed to upsert proxy user: %v", err)
+		return nil
+	}
 
 	user := &models.AuthenticatedUser{
 		Username:    username,

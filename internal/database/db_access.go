@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -179,6 +180,86 @@ func UpsertOIDCUser(app *server.App, username, email, displayName, groupsJSON st
 	return err
 }
 
+func UpsertProxyUser(app *server.App, username, email, displayName, groupsJSON string) error {
+	// Email is unique across all users, but proxy identities are keyed by username.
+	// Keep a conflicting email on its existing account rather than rejecting auth.
+	storedProxyEmail := email
+	if email != "" {
+		var emailTaken bool
+		if err := app.DB.QueryRow(
+			"SELECT EXISTS(SELECT 1 FROM users WHERE email = ? AND username <> ?)",
+			email, username,
+		).Scan(&emailTaken); err != nil {
+			return err
+		}
+		if emailTaken {
+			storedProxyEmail = ""
+		}
+	}
+
+	var passwordHash, storedEmail, storedDisplayName, storedGroups string
+	err := app.DB.QueryRow(
+		`SELECT password_hash, COALESCE(email, ''), COALESCE(display_name, ''), COALESCE(groups, '[]')
+		 FROM users WHERE username = ?`, username,
+	).Scan(&passwordHash, &storedEmail, &storedDisplayName, &storedGroups)
+	if err == nil {
+		if passwordHash != "PROXY_USER" {
+			return fmt.Errorf("proxy username %q belongs to another authentication source", username)
+		}
+		if storedEmail == storedProxyEmail && storedDisplayName == displayName && storedGroups == groupsJSON {
+			return nil
+		}
+
+		result, err := app.DB.Exec(
+			`UPDATE users SET email = CASE WHEN EXISTS(
+			   SELECT 1 FROM users WHERE email = ? AND username <> ?
+			 ) THEN NULL ELSE NULLIF(?, '') END,
+			 display_name = ?, groups = ?, updated_at = ?
+			 WHERE username = ? AND password_hash = 'PROXY_USER'`,
+			email, username, email, displayName, groupsJSON, time.Now(), username,
+		)
+		if err != nil {
+			return err
+		}
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if updated == 0 {
+			return fmt.Errorf("proxy user %q changed during authentication", username)
+		}
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+
+	result, err := app.DB.Exec(
+		`INSERT INTO users (username, email, password_hash, display_name, groups)
+		 VALUES (?, CASE WHEN EXISTS(
+		   SELECT 1 FROM users WHERE email = ? AND username <> ?
+		 ) THEN NULL ELSE NULLIF(?, '') END, 'PROXY_USER', ?, ?)
+		 ON CONFLICT(username) DO UPDATE SET
+		   email = excluded.email,
+		   display_name = excluded.display_name,
+		   groups = excluded.groups,
+		   updated_at = ?
+		 WHERE users.password_hash = 'PROXY_USER'`,
+		username, email, username, email, displayName, groupsJSON, time.Now(),
+	)
+	if err != nil {
+		return err
+	}
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if inserted == 0 {
+		return fmt.Errorf("proxy username %q belongs to another authentication source", username)
+	}
+	return nil
+}
+
 func CreateSession(app *server.App, userID int, token string, expiresAt time.Time) error {
 	_, err := app.DB.Exec(
 		"INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)",
@@ -288,12 +369,6 @@ func GetPreferences(app *server.App, userID int) (string, error) {
 	return prefs, err
 }
 
-func GetPreferencesByUsername(app *server.App, username string) (string, error) {
-	var prefs string
-	err := app.DB.QueryRow("SELECT preferences FROM user_preferences WHERE username = ?", username).Scan(&prefs)
-	return prefs, err
-}
-
 func SavePreferences(app *server.App, userID int, username string, prefsJSON string) error {
 	_, err := app.DB.Exec(
 		`INSERT OR REPLACE INTO user_preferences (user_id, username, preferences, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
@@ -306,14 +381,6 @@ func SavePreferencesByUserID(app *server.App, userID int, prefsJSON string) erro
 	_, err := app.DB.Exec(
 		`INSERT OR REPLACE INTO user_preferences (user_id, preferences, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
 		userID, prefsJSON,
-	)
-	return err
-}
-
-func SavePreferencesByUsername(app *server.App, username string, prefsJSON string) error {
-	_, err := app.DB.Exec(
-		`INSERT OR REPLACE INTO user_preferences (user_id, username, preferences, updated_at) VALUES (-1, ?, ?, CURRENT_TIMESTAMP)`,
-		username, prefsJSON,
 	)
 	return err
 }
