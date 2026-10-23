@@ -422,7 +422,7 @@ npm run test:ui
 ### Build with Version
 
 ```bash
-CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=1.0.2" -o dashgate .
+CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=1.5.3" -o dashgate .
 ```
 
 ## License
