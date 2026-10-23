@@ -608,6 +608,7 @@
                 await loadNPMDiscoveryStatus();
                 await loadCaddyDiscoveryStatus();
                 await loadUnraidDiscoveryStatus();
+                await loadDiscoveredAppsData();
 
             } catch (e) {
                 showToast('Error saving settings: ' + e.message);

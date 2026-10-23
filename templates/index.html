@@ -4081,11 +4081,11 @@ environment:
                   Check why an app appears or is hidden for a saved user. External authentication groups are stored snapshots, not live identity-provider data.
                 </p>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
-                  <select id="accessCheckUser" class="admin-search-input" aria-label="User" style="max-width: 240px"></select>
-                  <select id="accessCheckApp" class="admin-search-input" aria-label="App" style="max-width: 320px"></select>
-                  <button type="button" class="settings-btn" onclick="checkAppAccess()">Explain access</button>
+                  <select id="accessCheckUser" class="admin-search-input" aria-label="User" style="max-width: 240px" disabled></select>
+                  <select id="accessCheckApp" class="admin-search-input" aria-label="App" style="max-width: 320px" disabled></select>
+                  <button type="button" id="accessCheckButton" class="settings-btn" onclick="checkAppAccess()" disabled>Explain access</button>
                 </div>
-                <div id="accessCheckResult" class="settings-desc" role="status" aria-live="polite" style="margin-top: 12px; white-space: pre-line"></div>
+                <div id="accessCheckResult" class="settings-desc" role="status" aria-live="polite" style="margin-top: 12px; white-space: pre-line">Loading users and apps...</div>
               </div>
               <div class="settings-divider"></div>
               <!-- Local Users (shown when local auth is enabled) -->

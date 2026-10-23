@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	urlpkg "net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -11,6 +12,48 @@ import (
 	"dashgate/internal/models"
 	"dashgate/internal/server"
 )
+
+func testAccessAppID(t *testing.T, app *server.App, source, name string) string {
+	t.Helper()
+	if app.DockerDiscovery == nil {
+		app.DockerDiscovery = server.NewDiscoveryManager()
+	}
+	if app.TraefikDiscovery == nil {
+		app.TraefikDiscovery = server.NewDiscoveryManager()
+	}
+	if app.NginxDiscovery == nil {
+		app.NginxDiscovery = server.NewDiscoveryManager()
+	}
+	if app.NPMDiscovery == nil {
+		app.NPMDiscovery = server.NewDiscoveryManager()
+	}
+	if app.CaddyDiscovery == nil {
+		app.CaddyDiscovery = server.NewDiscoveryManager()
+	}
+	if app.UnraidDiscovery == nil {
+		app.UnraidDiscovery = server.NewDiscoveryManager()
+	}
+	w := httptest.NewRecorder()
+	AccessAppsHandler(app)(w, httptest.NewRequest(http.MethodGet, "/api/admin/access-apps", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("catalog status = %d: %s", w.Code, w.Body.String())
+	}
+	var apps []struct{ ID, Name, Source string }
+	if err := json.Unmarshal(w.Body.Bytes(), &apps); err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range apps {
+		if candidate.Source == source && candidate.Name == name {
+			return candidate.ID
+		}
+	}
+	t.Fatalf("app %s (%s) not found in catalog", name, source)
+	return ""
+}
+
+func testAccessCheckURL(userID int, appID string) string {
+	return "/api/admin/access-check?" + (urlpkg.Values{"userId": {strconv.Itoa(userID)}, "appId": {appID}}).Encode()
+}
 
 func TestExplainConfigAccess(t *testing.T) {
 	tests := []struct {
@@ -83,6 +126,59 @@ func TestAccessUsersHandlerOmitsCredentials(t *testing.T) {
 	}
 }
 
+func TestAccessUsersHandlerMalformedGroupsDoNotBreakCatalog(t *testing.T) {
+	app := setupTestAppWithDB(t)
+	id := seedUser(t, app, "broken", "unused-password", "Broken", false)
+	if _, err := app.DB.Exec("UPDATE users SET groups = 'not-json' WHERE id = ?", id); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	AccessUsersHandler(app)(w, httptest.NewRequest(http.MethodGet, "/api/admin/access-users", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var users []struct {
+		Groups        []string `json:"groups"`
+		GroupsInvalid bool     `json:"groupsInvalid"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &users); err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 || len(users[0].Groups) != 0 || !users[0].GroupsInvalid {
+		t.Fatalf("users = %+v", users)
+	}
+}
+
+func TestAccessCheckHandlerOpaqueIDKeepsAppTokenOutOfRequest(t *testing.T) {
+	app := setupTestAppWithDB(t)
+	userID := seedUser(t, app, "reader", "unused-password", "Reader", false)
+	app.Config.Categories = []models.Category{{Name: "Tools", Apps: []models.App{{Name: "Token App", URL: "https://app.test/?token=secret-token", Groups: []string{"users"}}}}}
+	appID := testAccessAppID(t, app, "config", "Token App")
+	query := urlpkg.Values{"userId": {strconv.Itoa(userID)}, "appId": {appID}}
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/access-check?"+query.Encode(), nil)
+	if strings.Contains(req.URL.String(), "secret-token") {
+		t.Fatal("app URL token leaked into request URL")
+	}
+	w := httptest.NewRecorder()
+	AccessCheckHandler(app)(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAccessCheckHandlerRejectsStaleCatalogID(t *testing.T) {
+	app := setupTestAppWithDB(t)
+	userID := seedUser(t, app, "reader", "unused-password", "Reader", false)
+	app.Config.Categories = []models.Category{{Name: "Tools", Apps: []models.App{{Name: "Original", URL: "https://app.test", Groups: []string{"users"}}}}}
+	appID := testAccessAppID(t, app, "config", "Original")
+	app.Config.Categories[0].Apps[0].Groups = []string{"admins"}
+	w := httptest.NewRecorder()
+	AccessCheckHandler(app)(w, httptest.NewRequest(http.MethodGet, testAccessCheckURL(userID, appID), nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("stale app selection status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestAccessCheckHandlerUsesEffectiveMappingAndStoredOIDCGroups(t *testing.T) {
 	app := setupTestAppWithDB(t)
 	userID := seedUser(t, app, "oidc-user", "unused-password", "OIDC User", false)
@@ -92,7 +188,7 @@ func TestAccessCheckHandlerUsesEffectiveMappingAndStoredOIDCGroups(t *testing.T)
 	app.Config.Categories = []models.Category{{Name: "Tools", Apps: []models.App{{Name: "Media", URL: "https://media.test", Groups: []string{"other"}}}}}
 	app.AppMappings = map[string][]string{"https://media.test": {"media"}}
 	w := httptest.NewRecorder()
-	url := "/api/admin/access-check?userId=" + strconv.Itoa(userID) + "&source=config&appUrl=https%3A%2F%2Fmedia.test&appId=config%3A0%3A0&appName=Media"
+	url := testAccessCheckURL(userID, testAccessAppID(t, app, "config", "Media"))
 	AccessCheckHandler(app)(w, httptest.NewRequest(http.MethodGet, url, nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
@@ -119,7 +215,7 @@ func TestAccessCheckHandlerEmptyConfigGroupsAreJSONList(t *testing.T) {
 	userID := seedUser(t, app, "reader", "unused-password", "Reader", false)
 	app.Config.Categories = []models.Category{{Name: "Tools", Apps: []models.App{{Name: "Private", URL: "https://private.test"}}}}
 	w := httptest.NewRecorder()
-	url := "/api/admin/access-check?userId=" + strconv.Itoa(userID) + "&source=config&appUrl=https%3A%2F%2Fprivate.test&appId=config%3A0%3A0&appName=Private"
+	url := testAccessCheckURL(userID, testAccessAppID(t, app, "config", "Private"))
 	AccessCheckHandler(app)(w, httptest.NewRequest(http.MethodGet, url, nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
@@ -200,7 +296,7 @@ func TestAccessCheckHandlerDiscoveredDuplicateCanBeVisible(t *testing.T) {
 	app.DockerDiscovery.SetApps([]models.App{{Name: "Raw", URL: "https://same.test"}})
 	app.DiscoveredOverrides = map[string]*models.DiscoveredAppOverride{"https://same.test": {NameOverride: "Renamed"}}
 	w := httptest.NewRecorder()
-	url := "/api/admin/access-check?userId=" + strconv.Itoa(userID) + "&source=docker&appUrl=https%3A%2F%2Fsame.test&appId=discovered%3A0&appName=Renamed"
+	url := testAccessCheckURL(userID, testAccessAppID(t, app, "docker", "Renamed"))
 	AccessCheckHandler(app)(w, httptest.NewRequest(http.MethodGet, url, nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
@@ -226,7 +322,7 @@ func TestAccessCheckHandlerSelectsSecondConfiguredDuplicate(t *testing.T) {
 		{Name: "Second", URL: "https://same.test"},
 	}}}
 	w := httptest.NewRecorder()
-	url := "/api/admin/access-check?userId=" + strconv.Itoa(userID) + "&source=config&appUrl=https%3A%2F%2Fsame.test&appId=config%3A0%3A1&appName=Second"
+	url := testAccessCheckURL(userID, testAccessAppID(t, app, "config", "Second"))
 	AccessCheckHandler(app)(w, httptest.NewRequest(http.MethodGet, url, nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
@@ -245,7 +341,9 @@ func TestAccessCheckHandlerAllowsUnnamedConfiguredApp(t *testing.T) {
 	userID := seedUser(t, app, "reader", "unused-password", "Reader", false)
 	app.Config.Categories = []models.Category{{Name: "Tools", Apps: []models.App{{URL: "https://unnamed.test"}}}}
 	w := httptest.NewRecorder()
-	url := "/api/admin/access-check?userId=" + strconv.Itoa(userID) + "&source=config&appUrl=https%3A%2F%2Funnamed.test&appId=config%3A0%3A0&appName="
+	url := testAccessCheckURL(userID, testAccessAppID(t, app, "config", ""))
 	AccessCheckHandler(app)(w, httptest.NewRequest(http.MethodGet, url, nil))
-	if w.Code != http.StatusOK { t.Fatalf("status = %d: %s", w.Code, w.Body.String()) }
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
 }

@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -74,6 +77,17 @@ type accessApp struct {
 	Source string `json:"source"`
 }
 
+// A catalog ID binds its position to the current entry without putting app
+// URLs (which may contain credentials) in access-check request URLs.
+func catalogID(app *server.App, position string, entry any) string {
+	data, _ := json.Marshal(entry)
+	mac := hmac.New(sha256.New, app.EncryptionKey)
+	mac.Write([]byte(position))
+	mac.Write([]byte{0})
+	mac.Write(data)
+	return position + ":" + hex.EncodeToString(mac.Sum(nil))
+}
+
 // AccessAppsHandler lists every current app source, including entries with
 // duplicate URLs that the regular app-management list intentionally omits.
 func AccessAppsHandler(app *server.App) http.HandlerFunc {
@@ -86,7 +100,12 @@ func AccessAppsHandler(app *server.App) http.HandlerFunc {
 		app.ConfigMu.RLock()
 		for categoryIndex, category := range app.Config.Categories {
 			for appIndex, configured := range category.Apps {
-				apps = append(apps, accessApp{ID: fmt.Sprintf("config:%d:%d", categoryIndex, appIndex), Name: configured.Name, URL: configured.URL, Source: "config"})
+				position := fmt.Sprintf("config:%d:%d", categoryIndex, appIndex)
+				apps = append(apps, accessApp{ID: catalogID(app, position, struct {
+					Category string
+					App      models.App
+					Groups   []string
+				}{category.Name, configured, config.GetAppGroups(app, configured)}), Name: configured.Name, URL: configured.URL, Source: "config"})
 			}
 		}
 		app.ConfigMu.RUnlock()
@@ -95,18 +114,20 @@ func AccessAppsHandler(app *server.App) http.HandlerFunc {
 			if discovered.Override != nil && discovered.Override.NameOverride != "" {
 				name = discovered.Override.NameOverride
 			}
-			apps = append(apps, accessApp{ID: fmt.Sprintf("discovered:%d", index), Name: name, URL: discovered.URL, Source: discovered.Source})
+			position := fmt.Sprintf("discovered:%d", index)
+			apps = append(apps, accessApp{ID: catalogID(app, position, discovered), Name: name, URL: discovered.URL, Source: discovered.Source})
 		}
 		respondJSON(w, http.StatusOK, apps)
 	}
 }
 
 type accessUser struct {
-	ID        int      `json:"id"`
-	Username  string   `json:"username"`
-	Source    string   `json:"source"`
-	Groups    []string `json:"groups"`
-	UpdatedAt string   `json:"updatedAt"`
+	ID            int      `json:"id"`
+	Username      string   `json:"username"`
+	Source        string   `json:"source"`
+	Groups        []string `json:"groups"`
+	GroupsInvalid bool     `json:"groupsInvalid,omitempty"`
+	UpdatedAt     string   `json:"updatedAt"`
 }
 
 func userSource(passwordHash string) string {
@@ -131,7 +152,8 @@ func scanAccessUser(row interface{ Scan(...any) error }) (*accessUser, error) {
 	}
 	user.Source = userSource(passwordHash)
 	if err := json.Unmarshal([]byte(groupsJSON), &user.Groups); err != nil {
-		return nil, err
+		user.GroupsInvalid = true
+		user.Groups = []string{}
 	}
 	if user.Groups == nil {
 		user.Groups = []string{}
@@ -195,9 +217,9 @@ func AccessCheckHandler(app *server.App) http.HandlerFunc {
 			return
 		}
 		id, err := strconv.Atoi(r.URL.Query().Get("userId"))
-		source, appURL := r.URL.Query().Get("source"), r.URL.Query().Get("appUrl")
-		appID, appName := r.URL.Query().Get("appId"), r.URL.Query().Get("appName")
-		if err != nil || id <= 0 || source == "" || appURL == "" || appID == "" {
+		appID := r.URL.Query().Get("appId")
+		parts := strings.Split(appID, ":")
+		if err != nil || id <= 0 || len(parts) < 3 {
 			respondError(w, http.StatusBadRequest, "User and app are required")
 			return
 		}
@@ -216,9 +238,14 @@ func AccessCheckHandler(app *server.App) http.HandlerFunc {
 		}
 		isAdmin := auth.CheckIsAdmin(app, user.Groups)
 		result := accessCheckResult{User: *user, AppGroups: []string{}}
-		if source == "config" {
-			var categoryIndex, appIndex int
-			if _, err := fmt.Sscanf(appID, "config:%d:%d", &categoryIndex, &appIndex); err != nil || categoryIndex < 0 || appIndex < 0 {
+		if parts[0] == "config" {
+			if len(parts) != 4 {
+				respondError(w, http.StatusBadRequest, "Invalid app selection")
+				return
+			}
+			categoryIndex, categoryErr := strconv.Atoi(parts[1])
+			appIndex, appErr := strconv.Atoi(parts[2])
+			if categoryErr != nil || appErr != nil || categoryIndex < 0 || appIndex < 0 {
 				respondError(w, http.StatusBadRequest, "Invalid app selection")
 				return
 			}
@@ -226,7 +253,12 @@ func AccessCheckHandler(app *server.App) http.HandlerFunc {
 			var found *models.App
 			if categoryIndex < len(app.Config.Categories) && appIndex < len(app.Config.Categories[categoryIndex].Apps) {
 				candidate := app.Config.Categories[categoryIndex].Apps[appIndex]
-				if candidate.URL == appURL && candidate.Name == appName {
+				position := fmt.Sprintf("config:%d:%d", categoryIndex, appIndex)
+				if hmac.Equal([]byte(catalogID(app, position, struct {
+					Category string
+					App      models.App
+					Groups   []string
+				}{app.Config.Categories[categoryIndex].Name, candidate, config.GetAppGroups(app, candidate)})), []byte(appID)) {
 					found = &candidate
 				}
 			}
@@ -238,9 +270,13 @@ func AccessCheckHandler(app *server.App) http.HandlerFunc {
 			result.AppName, result.AppSource = found.Name, "config"
 			result.AppGroups = append([]string{}, config.GetAppGroups(app, *found)...)
 			result.accessDecision = explainConfigAccess(result.AppGroups, user.Groups, isAdmin)
-		} else {
-			var discoveredIndex int
-			if _, err := fmt.Sscanf(appID, "discovered:%d", &discoveredIndex); err != nil || discoveredIndex < 0 {
+		} else if parts[0] == "discovered" {
+			if len(parts) != 3 {
+				respondError(w, http.StatusBadRequest, "Invalid app selection")
+				return
+			}
+			discoveredIndex, indexErr := strconv.Atoi(parts[1])
+			if indexErr != nil || discoveredIndex < 0 {
 				respondError(w, http.StatusBadRequest, "Invalid app selection")
 				return
 			}
@@ -248,11 +284,7 @@ func AccessCheckHandler(app *server.App) http.HandlerFunc {
 			raw := discovery.GetAllRawDiscoveredApps(app)
 			if discoveredIndex < len(raw) {
 				candidate := raw[discoveredIndex]
-				name := candidate.Name
-				if candidate.Override != nil && candidate.Override.NameOverride != "" {
-					name = candidate.Override.NameOverride
-				}
-				if candidate.Source == source && candidate.URL == appURL && name == appName {
+				if hmac.Equal([]byte(catalogID(app, fmt.Sprintf("discovered:%d", discoveredIndex), candidate)), []byte(appID)) {
 					found = &candidate
 				}
 			}
@@ -279,6 +311,9 @@ func AccessCheckHandler(app *server.App) http.HandlerFunc {
 				}
 				app.ConfigMu.RUnlock()
 			}
+		} else {
+			respondError(w, http.StatusBadRequest, "Invalid app selection")
+			return
 		}
 		respondJSON(w, http.StatusOK, result)
 	}

@@ -187,6 +187,13 @@ async function reloadApps() {
 
 async function loadAccessUsers() {
   const result = document.getElementById("accessCheckResult");
+  const userSelect = document.getElementById("accessCheckUser");
+  const appSelect = document.getElementById("accessCheckApp");
+  const checkButton = document.getElementById("accessCheckButton");
+  result.textContent = "Loading users and apps...";
+  userSelect.disabled = true;
+  appSelect.disabled = true;
+  checkButton.disabled = true;
   try {
     const previousApps = JSON.stringify(adminState.accessApps);
     const [usersResponse, appsResponse] = await Promise.all([
@@ -197,6 +204,9 @@ async function loadAccessUsers() {
     adminState.accessUsers = (await usersResponse.json()) || [];
     adminState.accessApps = (await appsResponse.json()) || [];
     renderAccessCheckChoices();
+    userSelect.disabled = !adminState.accessUsers.length;
+    appSelect.disabled = !adminState.accessApps.length;
+    checkButton.disabled = userSelect.disabled || appSelect.disabled;
     if (JSON.stringify(adminState.accessApps) !== previousApps) {
       document.getElementById("accessCheckApp").value = "";
     }
@@ -221,8 +231,15 @@ function renderAccessCheckChoices() {
   for (const user of adminState.accessUsers) {
     userSelect.add(new Option(`${user.username} (${user.source})`, String(user.id)));
   }
+  const labelCounts = new Map();
   for (const app of adminState.accessApps) {
-    appSelect.add(new Option(`${app.name} (${app.source})`, app.id));
+    const label = `${app.name || "(unnamed)"} (${app.source})`;
+    labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
+  }
+  for (const app of adminState.accessApps) {
+    const base = `${app.name || "(unnamed)"} (${app.source})`;
+    const label = labelCounts.get(base) > 1 ? `${base} — ${app.url} [${app.id.split(":").slice(0, -1).join(":")}]` : base;
+    appSelect.add(new Option(label, app.id));
   }
   userSelect.value = previousUser || "";
   appSelect.value = previousApp || "";
@@ -243,7 +260,7 @@ async function checkAppAccess() {
   }
   result.textContent = "Checking access...";
   try {
-    const query = new URLSearchParams({ userId, source: app.source, appUrl: app.url, appId: app.id, appName: app.name });
+    const query = new URLSearchParams({ userId, appId: app.id });
     const response = await fetch(`/api/admin/access-check?${query}`, { credentials: "include" });
     if (!response.ok) throw new Error(response.status === 404 ? "User or app is no longer available. Reload Admin and try again." : "Could not check access");
     const check = await response.json();
@@ -260,7 +277,7 @@ async function checkAppAccess() {
     const snapshot = check.user.source === "local"
       ? "Stored local groups"
       : `Stored ${check.user.source.toUpperCase()} groups (snapshot; updated ${check.user.updatedAt || "time unknown"})`;
-    result.textContent = `${check.visible ? "Visible" : "Hidden"}: ${check.appName} (${check.appSource})\n${reasons[check.reason] || check.reason}\n${snapshot}: ${check.user.groups.length ? check.user.groups.join(", ") : "none"}\nApp groups: ${check.appGroups.length ? check.appGroups.join(", ") : "none"}`;
+    result.textContent = `${check.visible ? "Visible" : "Not visible"}: ${check.appName} (${check.appSource})\n${reasons[check.reason] || check.reason}\n${snapshot}: ${check.user.groups.length ? check.user.groups.join(", ") : "none"}${check.user.groupsInvalid ? " (stored groups unreadable; treated as none)" : ""}\nApp groups: ${check.appGroups.length ? check.appGroups.join(", ") : "none"}`;
   } catch (error) {
     result.textContent = error.message;
   }
