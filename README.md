@@ -139,7 +139,7 @@ Each app supports:
 - `url` - Application URL
 - `icon` - Icon name (matches files in static/icons/) or URL
 - `description` - Short description
-- `groups` - List of groups that can see this app (empty = visible to all)
+- `groups` - List of groups that can see this configured app (empty = admin-only)
 - `depends_on` - List of app names this app depends on (for dependency graph)
 
 ## Authentication
@@ -268,6 +268,12 @@ Discovered apps are hidden by default. Use the admin panel to:
 - Override names, icons, URLs, and descriptions
 - Assign groups and categories
 - Test discovery connections
+
+A published discovered app with no assigned groups is visible to every authenticated user. An unpublished or hidden discovered app does not appear, including for admins.
+
+### Explaining App Access
+
+In **Admin > Users > Explain App Access**, select a saved user and an app to see whether the app appears on that user's dashboard and why. The explanation shows the app source, effective app groups, stored user groups, and any matching group. OIDC, LDAP, and proxy groups are snapshots saved by DashGate and may differ from the identity provider's current membership. The checker is read-only and available only to admins.
 
 ## LLDAP Integration
 

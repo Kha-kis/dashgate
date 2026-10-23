@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- **App access explanation** — admins can select a saved user and app to see the dashboard visibility decision, effective app groups, stored user groups, and the reason for the result. External authentication groups are identified as stored snapshots.
+
+### Documentation
+
+- Clarified that configured apps with no assigned groups are admin-only, while published discovered apps with no assigned groups are visible to all authenticated users.
+
 ## [1.5.3] - 2026-10-23
 
 ### Fixed

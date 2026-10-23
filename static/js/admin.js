@@ -10,6 +10,8 @@ let adminState = {
   users: [],
   groups: [],
   localUsers: [],
+  accessUsers: [],
+  accessApps: [],
   managedGroups: [],
   apps: [],
   categories: [],
@@ -155,6 +157,7 @@ async function loadAdminData() {
 
     // Load discovered apps for management
     await loadDiscoveredAppsData();
+
   } catch (e) {
     console.error("Failed to load admin data:", e);
   }
@@ -171,6 +174,7 @@ async function reloadApps() {
     if (appsResp.ok) {
       adminState.apps = await appsResp.json();
       renderAppsList();
+      await loadAccessUsers();
     }
     if (categoriesResp.ok) {
       adminState.categories = await categoriesResp.json();
@@ -178,6 +182,104 @@ async function reloadApps() {
     }
   } catch (e) {
     console.error("Failed to reload apps:", e);
+  }
+}
+
+async function loadAccessUsers() {
+  const result = document.getElementById("accessCheckResult");
+  const userSelect = document.getElementById("accessCheckUser");
+  const appSelect = document.getElementById("accessCheckApp");
+  const checkButton = document.getElementById("accessCheckButton");
+  result.textContent = "Loading users and apps...";
+  userSelect.disabled = true;
+  appSelect.disabled = true;
+  checkButton.disabled = true;
+  try {
+    const previousApps = JSON.stringify(adminState.accessApps);
+    const [usersResponse, appsResponse] = await Promise.all([
+      fetch("/api/admin/access-users", { credentials: "include" }),
+      fetch("/api/admin/access-apps", { credentials: "include" }),
+    ]);
+    if (!usersResponse.ok || !appsResponse.ok) throw new Error("Could not load access choices");
+    adminState.accessUsers = (await usersResponse.json()) || [];
+    adminState.accessApps = (await appsResponse.json()) || [];
+    renderAccessCheckChoices();
+    userSelect.disabled = !adminState.accessUsers.length;
+    appSelect.disabled = !adminState.accessApps.length;
+    checkButton.disabled = userSelect.disabled || appSelect.disabled;
+    if (JSON.stringify(adminState.accessApps) !== previousApps) {
+      document.getElementById("accessCheckApp").value = "";
+    }
+    result.textContent = !adminState.accessUsers.length
+      ? "No saved users are available yet."
+      : !adminState.accessApps.length
+        ? "No apps are available yet."
+        : "Select a user and app to see the dashboard visibility decision.";
+  } catch (error) {
+    result.textContent = error.message;
+  }
+}
+
+function renderAccessCheckChoices() {
+  const userSelect = document.getElementById("accessCheckUser");
+  const appSelect = document.getElementById("accessCheckApp");
+  if (!userSelect || !appSelect) return;
+  const previousUser = userSelect.value;
+  const previousApp = appSelect.value;
+  userSelect.replaceChildren(new Option("Select user", ""));
+  appSelect.replaceChildren(new Option("Select app", ""));
+  for (const user of adminState.accessUsers) {
+    userSelect.add(new Option(`${user.username} (${user.source})`, String(user.id)));
+  }
+  const labelCounts = new Map();
+  for (const app of adminState.accessApps) {
+    const label = `${app.name || "(unnamed)"} (${app.source})`;
+    labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
+  }
+  for (const app of adminState.accessApps) {
+    const base = `${app.name || "(unnamed)"} (${app.source})`;
+    const label = labelCounts.get(base) > 1 ? `${base} — ${app.url} [${app.id.split(":").slice(0, -1).join(":")}]` : base;
+    appSelect.add(new Option(label, app.id));
+  }
+  userSelect.value = previousUser || "";
+  appSelect.value = previousApp || "";
+}
+
+async function checkAppAccess() {
+  const result = document.getElementById("accessCheckResult");
+  const userId = document.getElementById("accessCheckUser").value;
+  const appKey = document.getElementById("accessCheckApp").value;
+  if (!userId || !appKey) {
+    result.textContent = "Select a user and an app.";
+    return;
+  }
+  const app = adminState.accessApps.find((candidate) => candidate.id === appKey);
+  if (!app) {
+    result.textContent = "The selected app is no longer available. Reload Admin and try again.";
+    return;
+  }
+  result.textContent = "Checking access...";
+  try {
+    const query = new URLSearchParams({ userId, appId: app.id });
+    const response = await fetch(`/api/admin/access-check?${query}`, { credentials: "include" });
+    if (!response.ok) throw new Error(response.status === 404 ? "User or app is no longer available. Reload Admin and try again." : "Could not check access");
+    const check = await response.json();
+    const reasons = {
+      admin: "The user's admin group grants access.",
+      admin_only: "This configured app has no assigned groups, so only admins see it.",
+      group_match: check.matchedGroup ? `The user belongs to the required group: ${check.matchedGroup}.` : "An empty group name matches an empty stored user group.",
+      no_group_match: "None of the app's required groups match the user's stored groups.",
+      unpublished: "This discovered app has not been published to the dashboard.",
+      hidden: "This discovered app is hidden.",
+      everyone: "This published discovered app has no group restriction.",
+      shown_as_config: "A configured app with the same URL already appears instead of this discovered entry.",
+    };
+    const snapshot = check.user.source === "local"
+      ? "Stored local groups"
+      : `Stored ${check.user.source.toUpperCase()} groups (snapshot; updated ${check.user.updatedAt || "time unknown"})`;
+    result.textContent = `${check.visible ? "Visible" : "Not visible"}: ${check.appName} (${check.appSource})\n${reasons[check.reason] || check.reason}\n${snapshot}: ${check.user.groups.length ? check.user.groups.join(", ") : "none"}${check.user.groupsInvalid ? " (stored groups unreadable; treated as none)" : ""}\nApp groups: ${check.appGroups.length ? check.appGroups.join(", ") : "none"}`;
+  } catch (error) {
+    result.textContent = error.message;
   }
 }
 
@@ -205,6 +307,7 @@ async function reloadLocalUsers() {
     if (resp.ok) {
       adminState.localUsers = (await resp.json()) || [];
       renderLocalUsersList();
+      await loadAccessUsers();
     }
   } catch (e) {
     console.error("Failed to reload local users:", e);

@@ -30,6 +30,25 @@ test.describe("Admin Panel", () => {
     expect(pageErrors).toEqual([]);
   });
 
+  test("explains a saved user's app access", async ({ page }) => {
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="users"]').click();
+
+    await expect(page.locator('#accessCheckUser option')).toContainText(['Select user', 'admin (local)']);
+    await page.locator('#accessCheckUser').selectOption({ label: 'admin (local)' });
+    await page.locator('#accessCheckApp').selectOption({ label: 'Grafana (config)' });
+    const checkRequest = page.waitForRequest(request => request.url().includes('/api/admin/access-check?'));
+    await page.getByRole('button', { name: 'Explain access' }).click();
+    const requestURL = new URL((await checkRequest).url());
+    expect(requestURL.searchParams.has('appUrl')).toBe(false);
+    expect(requestURL.searchParams.has('appName')).toBe(false);
+    expect(requestURL.searchParams.has('appId')).toBe(true);
+
+    await expect(page.locator('#accessCheckResult')).toContainText('Visible: Grafana (config)');
+    await expect(page.locator('#accessCheckResult')).toContainText("The user's admin group grants access.");
+  });
+
   test("Docker and Nginx discoveries appear in the inbox", async ({ page }) => {
     await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: {
       active: [

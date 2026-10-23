@@ -608,6 +608,7 @@
                 await loadNPMDiscoveryStatus();
                 await loadCaddyDiscoveryStatus();
                 await loadUnraidDiscoveryStatus();
+                await loadDiscoveredAppsData();
 
             } catch (e) {
                 showToast('Error saving settings: ' + e.message);
@@ -631,6 +632,7 @@
             } catch (e) {
                 console.error('Failed to load discovered apps:', e);
             }
+            await loadAccessUsers();
         }
 
         function renderDiscoveredAppsList() {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"log"
 	"net/http"
-	"strings"
 
 	"dashgate/internal/auth"
 	"dashgate/internal/config"
@@ -19,32 +18,14 @@ import (
 // user is allowed to see based on their group membership. Admins see all apps.
 // Apps with no groups assigned are only visible to admins.
 func filterAppsByGroups(sApp *server.App, categories []models.Category, userGroups []string, isAdmin bool) []models.Category {
-	groupSet := make(map[string]bool)
-	for _, g := range userGroups {
-		groupSet[strings.TrimSpace(g)] = true
-	}
-
 	var filtered []models.Category
 	for _, cat := range categories {
 		var filteredApps []models.App
 		for _, a := range cat.Apps {
-			// Admins see everything
-			if isAdmin {
+			appGroups := config.GetAppGroups(sApp, a)
+			if explainConfigAccess(appGroups, userGroups, isAdmin).Visible {
 				a.Status = health.GetHealthStatus(sApp, a.URL)
 				filteredApps = append(filteredApps, a)
-				continue
-			}
-			appGroups := config.GetAppGroups(sApp, a)
-			// No groups assigned = admin-only
-			if len(appGroups) == 0 {
-				continue
-			}
-			for _, requiredGroup := range appGroups {
-				if groupSet[requiredGroup] {
-					a.Status = health.GetHealthStatus(sApp, a.URL)
-					filteredApps = append(filteredApps, a)
-					break
-				}
 			}
 		}
 		if len(filteredApps) > 0 {
@@ -98,11 +79,6 @@ func DashboardHandler(app *server.App) http.HandlerFunc {
 		}
 
 		// Add discovered apps that have overrides (opt-in model)
-		userGroupSet := make(map[string]bool)
-		for _, g := range user.Groups {
-			userGroupSet[strings.TrimSpace(g)] = true
-		}
-
 		rawDiscovered := discovery.GetAllRawDiscoveredApps(app)
 		discoveredByCategory := make(map[string][]models.App)
 
@@ -111,26 +87,8 @@ func DashboardHandler(app *server.App) http.HandlerFunc {
 			if configURLs[dApp.URL] {
 				continue
 			}
-			// Skip if no override (not configured = not shown)
-			if dApp.Override == nil {
+			if !explainDiscoveredAccess(dApp.Override, user.Groups, user.IsAdmin).Visible {
 				continue
-			}
-			// Skip if hidden
-			if dApp.Override.Hidden {
-				continue
-			}
-			// Check group access (admins see all; no groups = visible to all)
-			if !user.IsAdmin && len(dApp.Override.Groups) > 0 {
-				hasAccess := false
-				for _, g := range dApp.Override.Groups {
-					if userGroupSet[g] {
-						hasAccess = true
-						break
-					}
-				}
-				if !hasAccess {
-					continue
-				}
 			}
 
 			// Apply overrides
