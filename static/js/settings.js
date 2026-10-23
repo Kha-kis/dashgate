@@ -561,6 +561,7 @@ async function changePassword() {
 async function logoutUser() {
   try {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    localStorage.removeItem("dashgate-my-apps");
     window.location.reload();
   } catch (e) {
     showToast("Logout failed");

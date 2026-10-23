@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- **My Apps dashboard display (#18)** — personal apps now render before shared categories or on an otherwise empty dashboard, and server preferences update the dashboard and browser copy after sign-in. Unsynced browser changes can be restored or discarded after reviewing the account list; preference writes verify their originating account.
+- **Personal app safety** — invalid and non-HTTP(S) links are not rendered, imported or synchronized fields cannot inject dashboard markup, and one account's cached links are not displayed for another account. Older browser-only links and failed syncs are preserved for review and recovery.
+- **Personal app search and status** — synced links enter dashboard search immediately, and status refresh updates shared cards when a personal link uses the same URL without inflating monitored-service counts.
+- **Discovery settings feedback (#13)** — environment-controlled sources are read-only in the admin UI, and rejected saves report an error instead of a false success message.
+
+### Verified
+
+- **Admin user and discovery lists (#13, #14)** — added browser coverage for the local user list, Add User form, and Docker/Nginx discovery inbox on the current code.
+
 ## [1.5.2] - 2026-10-22
 
 ### Fixed

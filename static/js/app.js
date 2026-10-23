@@ -9,19 +9,15 @@ let favorites = (() => {
     return [];
   }
 })();
-let myApps = (() => {
-  try {
-    return JSON.parse(localStorage.getItem("dashgate-my-apps") || "[]");
-  } catch {
-    return [];
-  }
-})();
+// Personal links belong to the authenticated account. Never render an origin-wide cache.
+let myApps = [];
 let searchIndex = -1;
 let contextTarget = null;
 let autoRefreshInterval = null;
 let isAuthenticated = false;
 let currentUser = null;
 let prefsSyncEnabled = false;
+let pendingMyAppsRecoveryRequired = false;
 
 // Default settings
 const defaultSettings = {
@@ -119,6 +115,7 @@ async function loadServerPreferences() {
       if (prefsResp.ok) {
         const serverPrefs = await prefsResp.json();
         prefsSyncEnabled = true;
+        preserveLegacyMyApps(serverPrefs.myApps);
 
         // Merge server prefs with defaults
         if (serverPrefs.settings) {
@@ -129,10 +126,16 @@ async function loadServerPreferences() {
           favorites = serverPrefs.favorites;
           renderFavorites();
         }
-        if (serverPrefs.myApps) {
-          myApps = serverPrefs.myApps;
-          renderMyAppsList();
+        const syncedApps = Array.isArray(serverPrefs.myApps) ? serverPrefs.myApps : [];
+        const pendingApps = getPendingMyApps();
+        pendingMyAppsRecoveryRequired = !!pendingApps && !personalAppListsMatch(pendingApps, syncedApps);
+        myApps = syncedApps;
+        if (pendingApps && personalAppListsMatch(pendingApps, syncedApps)) {
+          localStorage.removeItem(myAppsPendingKey());
         }
+        localStorage.setItem("dashgate-my-apps", JSON.stringify(myApps));
+        renderMyAppsList();
+        renderMyAppsOnDashboard();
       }
 
       // Update user section in settings
@@ -143,34 +146,118 @@ async function loadServerPreferences() {
   }
 }
 
-// Save all preferences to server
-async function syncPreferencesToServer() {
-  if (!prefsSyncEnabled) return;
-
-  try {
-    const response = await fetch("/api/user/preferences", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        settings: settings,
-        favorites: favorites,
-        myApps: myApps,
-      }),
-    });
-    if (!response.ok) {
-      throw new Error(`Server returned ${response.status}`);
-    }
-  } catch (e) {
-    console.error("Failed to sync preferences:", e);
+function preserveLegacyMyApps(serverApps) {
+  if (localStorage.getItem("dashgate-my-apps-migration-checked")) return;
+  const oldValue = localStorage.getItem("dashgate-my-apps");
+  if (oldValue) {
+    try {
+      const oldApps = JSON.parse(oldValue);
+      if (Array.isArray(oldApps) && oldApps.length > 0) {
+        const synced = Array.isArray(serverApps) && personalAppListsMatch(oldApps, serverApps);
+        if (!synced) localStorage.setItem("dashgate-my-apps-legacy-backup", oldValue);
+      }
+    } catch (_) { /* Ignore an invalid old cache. */ }
   }
+  localStorage.setItem("dashgate-my-apps-migration-checked", "1");
+}
+
+function personalAppFieldsMatch(a, b) {
+  return a && b && a.url === b.url && a.name === b.name &&
+    (a.description || "") === (b.description || "") &&
+    (a.icon || "") === (b.icon || "");
+}
+
+function personalAppListsMatch(a, b) {
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length &&
+    a.every((app, index) => personalAppFieldsMatch(app, b[index]));
+}
+
+function myAppsPendingKey() {
+  if (!currentUser?.source || !currentUser?.username) return null;
+  return `dashgate-my-apps-pending:${encodeURIComponent(currentUser.source)}:${encodeURIComponent(currentUser.username)}`;
+}
+
+function getPendingMyApps() {
+  const key = myAppsPendingKey();
+  if (!key) return null;
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || 'null');
+    return Array.isArray(value) ? value : null;
+  } catch (_) { return null; }
+}
+
+function markMyAppsPending() {
+  const key = myAppsPendingKey();
+  if (!key) return false;
+  localStorage.setItem(key, JSON.stringify(myApps));
+  return true;
+}
+
+// Serialize preference writes so an older request cannot finish after a newer edit.
+let preferenceWriteTail = Promise.resolve();
+let myAppsDiscardInProgress = false;
+let syncAttemptedDuringDiscard = false;
+function syncPreferencesToServer(preferences = null) {
+  if (!prefsSyncEnabled) return Promise.resolve(false);
+  if (myAppsDiscardInProgress) {
+    syncAttemptedDuringDiscard = true;
+    return Promise.resolve(false);
+  }
+  const body = JSON.stringify(preferences || {
+    settings: settings,
+    favorites: favorites,
+    myApps: myApps,
+  });
+  const sentApps = JSON.parse(body).myApps || [];
+  const pendingKey = myAppsPendingKey();
+  const expectedUser = currentUser && {
+    source: currentUser.source,
+    username: currentUser.username,
+  };
+  const write = preferenceWriteTail.then(async () => {
+    try {
+      if (!expectedUser?.source || !expectedUser?.username) return false;
+      const identityResponse = await fetch('/api/auth/me', { credentials: 'include' });
+      if (!identityResponse.ok) return false;
+      const activeUser = await identityResponse.json();
+      if (activeUser.source !== expectedUser.source || activeUser.username !== expectedUser.username) {
+        console.warn('Preference sync stopped because the signed-in account changed');
+        return false;
+      }
+      const response = await fetch("/api/user/preferences", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-DashGate-Expected-Source": encodeURIComponent(expectedUser.source),
+          "X-DashGate-Expected-Username": encodeURIComponent(expectedUser.username),
+        },
+        credentials: "include",
+        body,
+      });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      if (pendingKey && personalAppListsMatch(getPendingMyApps(), sentApps)) {
+        localStorage.removeItem(pendingKey);
+        pendingMyAppsRecoveryRequired = false;
+      }
+      updateMyAppsPendingNotice();
+      return true;
+    } catch (e) {
+      console.error("Failed to sync preferences:", e);
+      return false;
+    }
+  });
+  preferenceWriteTail = write.then(() => undefined);
+  return write;
 }
 
 // Debounced version to avoid rapid repeated server syncs
 let _syncTimeout = null;
 function debouncedSyncPreferences() {
   clearTimeout(_syncTimeout);
-  _syncTimeout = setTimeout(syncPreferencesToServer, 500);
+  _syncTimeout = setTimeout(() => {
+    _syncTimeout = null;
+    syncPreferencesToServer();
+  }, 500);
 }
 
 function initApps() {
@@ -185,11 +272,12 @@ function initApps() {
 }
 
 function updateCounts() {
-  const online = apps.filter((a) => a.status === "online").length;
-  const offline = apps.filter((a) => a.status === "offline").length;
+  const monitoredApps = apps.filter((a) => !a.element.closest("#myAppsSection"));
+  const online = monitoredApps.filter((a) => a.status === "online").length;
+  const offline = monitoredApps.filter((a) => a.status === "offline").length;
   document.getElementById("onlineCount").textContent = online;
   document.getElementById("offlineCount").textContent = offline;
-  document.getElementById("totalCount").textContent = apps.length;
+  document.getElementById("totalCount").textContent = monitoredApps.length;
 }
 
 function updateTime() {
@@ -523,14 +611,14 @@ async function refreshHealth() {
     const data = await resp.json();
     data.forEach((cat) => {
       cat.apps.forEach((app) => {
-        const el = document.querySelector(
+        const elements = document.querySelectorAll(
           `.app-item[data-url="${CSS.escape(app.url)}"]`,
         );
-        if (el) {
+        elements.forEach((el) => {
           el.dataset.status = app.status;
           el.querySelector(".app-status").className =
             `app-status ${app.status}`;
-        }
+        });
       });
     });
     initApps();
@@ -603,6 +691,7 @@ function addLogoutButton() {
 async function logout() {
   try {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    localStorage.removeItem("dashgate-my-apps");
     if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: "CLEAR_CACHES" });
     }

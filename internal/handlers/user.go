@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 
 	"dashgate/internal/auth"
 	"dashgate/internal/database"
@@ -44,6 +45,22 @@ func UserPreferencesHandler(app *server.App) http.HandlerFunc {
 			respondJSON(w, http.StatusOK, prefObj)
 
 		case http.MethodPut:
+			// Browser writes carry their original account identity so an old tab
+			// cannot apply a queued edit after another tab changes the session.
+			if expectedSource := r.Header.Get("X-DashGate-Expected-Source"); expectedSource != "" {
+				source, err := url.QueryUnescape(expectedSource)
+				if err != nil || source != user.Source {
+					respondError(w, http.StatusConflict, "Signed-in account changed")
+					return
+				}
+			}
+			if expectedUsername := r.Header.Get("X-DashGate-Expected-Username"); expectedUsername != "" {
+				username, err := url.QueryUnescape(expectedUsername)
+				if err != nil || username != user.Username {
+					respondError(w, http.StatusConflict, "Signed-in account changed")
+					return
+				}
+			}
 			var prefs map[string]interface{}
 			if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
 				respondError(w, http.StatusBadRequest, "Invalid request body")
