@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"dashgate/internal/models"
@@ -32,6 +34,38 @@ var (
 
 // maxIncludeFileSize is the maximum size of a file that can be included (1 MB).
 const maxIncludeFileSize = 1 << 20
+
+const includePermissionWarningInterval = time.Hour
+
+type includeWarningLimiter struct {
+	mu   sync.Mutex
+	last map[string]time.Time
+}
+
+func (limiter *includeWarningLimiter) shouldLog(path string, err error, now time.Time) bool {
+	if !errors.Is(err, os.ErrPermission) {
+		return true
+	}
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	if previous, ok := limiter.last[path]; ok && now.Sub(previous) < includePermissionWarningInterval {
+		return false
+	}
+	if limiter.last == nil {
+		limiter.last = make(map[string]time.Time)
+	}
+	limiter.last[path] = now
+	return true
+}
+
+var nginxIncludeWarnings includeWarningLimiter
+
+type includeResolver struct {
+	readFile func(string) ([]byte, error)
+	logf     func(string, ...any)
+	warnings *includeWarningLimiter
+	now      func() time.Time
+}
 
 // InitNginxDiscovery checks environment variables and system config,
 // then starts the Nginx discovery loop if enabled.
@@ -278,6 +312,16 @@ func dedupeAppsByBasePath(apps []models.App) []models.App {
 // replacing them with the contents of the included files. Depth-limited
 // to prevent infinite recursion.
 func resolveIncludes(content string, depth int) string {
+	resolver := includeResolver{
+		readFile: os.ReadFile,
+		logf:     log.Printf,
+		warnings: &nginxIncludeWarnings,
+		now:      time.Now,
+	}
+	return resolver.resolve(content, depth)
+}
+
+func (resolver *includeResolver) resolve(content string, depth int) string {
 	if depth > 3 {
 		return content
 	}
@@ -326,14 +370,16 @@ func resolveIncludes(content string, depth int) string {
 				continue
 			}
 
-			data, err := os.ReadFile(resolved)
+			data, err := resolver.readFile(resolved)
 			if err != nil {
-				log.Printf("Nginx include: cannot read %s: %v", resolved, err)
+				if resolver.warnings.shouldLog(resolved, err, resolver.now()) {
+					resolver.logf("Nginx include: cannot read %s: %v", resolved, err)
+				}
 				continue
 			}
 
 			// Recursively resolve includes in the included content
-			result.WriteString(resolveIncludes(string(data), depth+1))
+			result.WriteString(resolver.resolve(string(data), depth+1))
 			result.WriteString("\n")
 		}
 		return result.String()

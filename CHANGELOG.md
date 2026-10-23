@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Nginx discovery logging** — unreadable protected include files still remain excluded from discovery, but permission warnings for the same path are limited to once per hour instead of repeating on every scan.
+
 ## [1.5.3] - 2026-10-23
 
 ### Added
