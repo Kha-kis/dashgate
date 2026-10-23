@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- **Discovery inbox triage** — admins can dismiss individual or selected unconfigured or Hidden discovered routes into a persistent Ignored list and restore them later, including after a source stops reporting a route. Dismissal is separate from publishing and dashboard visibility.
+
 ## [1.5.4] - 2026-10-23
 
 ### Fixed
