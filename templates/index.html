@@ -1154,8 +1154,17 @@
                 </button>
               </div>
               <p class="settings-desc" style="margin-bottom: 12px">
-                Add your own apps and websites. Stored in your browser.
+                Add your own apps and websites. Synced to your account across browsers.
               </p>
+              <div id="myAppsMigrationNotice" class="settings-desc" style="display: none; margin-bottom: 12px">
+                An older browser-only My Apps list differs from this account. Review both lists before replacing this account's list.
+                <button type="button" class="settings-btn" id="restoreLegacyMyApps" onclick="restoreLegacyMyApps()" style="margin-top: 8px; padding: 6px 12px; font-size: 12px">Review and restore older apps</button>
+              </div>
+              <div id="myAppsPendingNotice" class="settings-desc" style="display: none; margin-bottom: 12px">
+                Changes to your personal apps have not synced to the server yet.
+                <button type="button" class="settings-btn" id="retryMyAppsSync" onclick="retryMyAppsSync()" style="margin-top: 8px; padding: 6px 12px; font-size: 12px">Retry sync</button>
+                <button type="button" class="settings-btn" id="discardPendingMyApps" onclick="discardPendingMyApps()" style="margin-top: 8px; padding: 6px 12px; font-size: 12px">Keep account apps</button>
+              </div>
               <div class="favorites-list" id="myAppsList"></div>
               <div class="favorites-empty" id="myAppsEmpty">
                 <svg
@@ -4371,7 +4380,8 @@ environment:
           <div class="admin-form-group">
             <label>Access Groups</label>
             <p class="settings-desc" style="margin-bottom: 8px">
-              Select which groups can see this app
+              The admin group is always included. Select another group to show
+              this app to its members; OIDC group names must match the ID token.
             </p>
             <div
               class="admin-group-checkboxes"

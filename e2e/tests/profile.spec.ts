@@ -6,7 +6,10 @@ test.describe("Profile", () => {
     await login(page);
     await page.locator(".dock-item").nth(4).click();
     await expect(page.locator("#settingsModal")).toBeVisible();
-    await page.locator('[data-tab="profile"]').click();
+    await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/user/profile') && response.request().method() === 'GET'),
+      page.locator('[data-tab="profile"]').click(),
+    ]);
   });
 
   test("profile tab shows current user info", async ({ page }) => {
@@ -51,7 +54,10 @@ test.describe("Profile", () => {
       await page.locator(".dock-item").nth(4).click();
       await expect(page.locator("#settingsModal")).toBeVisible();
       await page.locator('[data-tab="profile"]').click();
-      await expect(page.locator("#profileDisplayName")).toHaveValue(/./, {
+      await expect(page.locator("#profileDisplayName")).toHaveValue("Updated Name", {
+        timeout: 5000,
+      });
+      await expect(page.locator("#profileEmail")).toHaveValue("updated@test.local", {
         timeout: 5000,
       });
 

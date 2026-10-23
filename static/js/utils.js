@@ -41,7 +41,7 @@
             if (text === null || text === undefined) return '';
             const div = document.createElement('div');
             div.appendChild(document.createTextNode(String(text)));
-            return div.innerHTML.replace(/'/g, '&#39;');
+            return div.innerHTML.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
         }
 
         function showToast(msg) {

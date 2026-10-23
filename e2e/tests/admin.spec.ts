@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { login } from "../helpers/auth";
 
 test.describe("Admin Panel", () => {
+  // API fixtures must reach Playwright routes rather than the PWA service worker.
+  test.use({ serviceWorkers: 'block' });
   test.beforeEach(async ({ page }) => {
     await login(page);
   });
@@ -12,6 +14,88 @@ test.describe("Admin Panel", () => {
 
     const adminTab = page.locator('[data-tab="admin"]');
     await expect(adminTab).toBeVisible();
+  });
+
+  test("local users load and Add User opens its form", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="users"]').click();
+
+    await expect(page.locator('#localUsersList')).toContainText('admin');
+    await page.locator('button[onclick="openCreateLocalUserModal()"]').click();
+    await expect(page.locator('#localUserModal')).toBeVisible();
+    await expect(page.locator('#localUserUsername')).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("Docker and Nginx discoveries appear in the inbox", async ({ page }) => {
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: {
+      active: [
+        { name: 'Docker Found', url: 'https://docker.example.test', source: 'docker', icon: '', description: '' },
+        { name: 'Nginx Found', url: 'https://nginx.example.test', source: 'nginx', icon: '', description: '' },
+      ],
+      stale: [],
+    } }));
+
+    // Install the fixture before the admin preload, which starts on page load.
+    await page.reload();
+
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await expect(page.locator('#discoveredAppsList')).toContainText('Docker Found');
+    await expect(page.locator('#discoveredAppsList')).toContainText('Nginx Found');
+  });
+
+  test("discovery save reports an environment-controlled source rejection", async ({ page }) => {
+    await page.route('**/api/admin/docker-discovery', async route => {
+      if (route.request().method() === 'PUT') {
+        await route.fulfill({ status: 409, json: { error: 'Docker discovery is controlled by environment variables' } });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="discovery"]').click();
+    await page.evaluate(() => (window as any).markDiscoveryDirty());
+    await page.locator('#saveDiscoveryConfig').click();
+    await expect(page.locator('#toast')).toContainText('Docker discovery');
+    await expect(page.locator('#saveDiscoveryConfig')).toBeEnabled();
+  });
+
+  test("environment-controlled discovery stays enabled and cannot be changed in the UI", async ({ page }) => {
+    let writes = 0;
+    let reads = 0;
+    await page.route('**/api/admin/docker-discovery', async route => {
+      if (route.request().method() === 'GET') {
+        reads++;
+        await route.fulfill({ json: { enabled: true, envOverride: true, socketPath: 'tcp://socket-proxy:2375', appCount: 2 } });
+      } else if (route.request().method() === 'PUT') {
+        writes++;
+        await route.fulfill({ status: 409, json: { error: 'Docker discovery is controlled by environment variables' } });
+      } else {
+        await route.continue();
+      }
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="discovery"]').click();
+
+    await page.evaluate(() => (window as any).loadDockerDiscoveryStatus());
+    expect(reads).toBeGreaterThan(0);
+    await expect(page.locator('#dockerDiscoveryEnabled')).toBeChecked();
+    await expect(page.locator('#dockerDiscoveryEnabled')).toBeDisabled();
+    await expect(page.locator('#dockerSocketPath')).toBeDisabled();
+    await expect(page.locator('#dockerStatusHint')).toContainText('2 app(s) discovered');
+    await page.evaluate(() => (window as any).markDiscoveryDirty());
+    await page.locator('#saveDiscoveryConfig').click();
+    await expect(page.locator('#toast')).toContainText('saved successfully');
+    expect(writes).toBe(0);
   });
 
   test("system config loads and saves", async ({ page }) => {

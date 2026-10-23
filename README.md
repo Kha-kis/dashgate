@@ -167,6 +167,10 @@ OpenID Connect authentication with any compliant provider (Authelia, Authentik, 
 - Configurable scopes and groups claim name
 - Automatic user creation on first login
 
+For group-based access and admin rights, configure the identity provider to include the chosen groups claim in the **ID token**. The group value must match DashGate's Admin Group (or an app's assigned group). If an OIDC user signs in without expected access, check the token claim mapping and exact group names first.
+
+New apps created in the admin UI include the configured Admin Group by default. To show one to an OIDC user, select an additional Access Group that appears in that user's ID token. Managed groups can be created under Admin > Users when local auth is enabled, but OIDC membership still comes from the identity provider.
+
 ### Proxy Authentication (Authelia/Authentik)
 
 Trust authentication headers from a reverse proxy:
@@ -254,6 +258,8 @@ unraid-api apikey --name "DashGate" --create --roles ADMIN --json
 
 Or configure via the admin UI under Discovery settings — enter your Unraid server URL and API key, then test the connection.
 
+Discovery sources enabled by environment variables are read-only in the admin UI. Change those variables in your deployment configuration and restart DashGate; sources configured in the UI are saved to the database.
+
 ### Managing Discovered Apps
 
 Discovered apps are hidden by default. Use the admin panel to:
@@ -301,6 +307,9 @@ All API endpoints return JSON. State-changing requests require a `X-CSRF-Token` 
 | `GET`     | `/api/dependencies`     | Service dependency graph           |
 
 API keys cannot access user preferences; these settings belong to a signed-in user.
+Personal apps in Settings > My Personal Apps sync through these preferences and appear on the dashboard, including when no shared categories are configured.
+After upgrading from a browser-only My Apps version, review the restoration notice in Settings > My Personal Apps. Confirm the full browser and account lists before restoring: restoration replaces the account list. DashGate keeps a local backup until the restore succeeds.
+If a personal-app change cannot reach the server, DashGate keeps an account-scoped pending copy. Retry sync shows the latest account list and asks before replacing it. Choose **Keep account apps** to discard the pending browser copy and continue editing the server list.
 Quick Links, Quick Notes, and the weather location remain local to each browser.
 
 ### Admin Endpoints

@@ -15,6 +15,13 @@
             if (btn) btn.disabled = true;
         }
 
+        function setDiscoveryFormLocked(configSection, envOverride, locked) {
+            configSection.querySelectorAll('input, select, textarea, button').forEach(control => {
+                control.disabled = !!locked;
+            });
+            envOverride.style.display = locked ? 'flex' : 'none';
+        }
+
         // Toggle functions for collapsible sections
         function toggleDockerSection() {
             const enabled = document.getElementById('dockerDiscoveryEnabled').checked;
@@ -61,6 +68,8 @@
 
                     // Populate fields
                     enabledChk.checked = status.enabled;
+                    enabledChk.disabled = !!status.envOverride;
+                    setDiscoveryFormLocked(configSection, envOverride, status.envOverride);
                     if (status.socketPath) socketPath.value = status.socketPath;
 
                     // Show env override warning if applicable
@@ -116,6 +125,8 @@
 
                     // Populate fields
                     enabledChk.checked = status.enabled;
+                    enabledChk.disabled = !!status.envOverride;
+                    setDiscoveryFormLocked(configSection, envOverride, status.envOverride);
                     if (status.url) urlInput.value = status.url;
                     if (status.username) usernameInput.value = status.username;
 
@@ -204,6 +215,8 @@
 
                     // Populate fields
                     enabledChk.checked = status.enabled;
+                    enabledChk.disabled = !!status.envOverride;
+                    setDiscoveryFormLocked(configSection, envOverride, status.envOverride);
                     if (status.configPath) pathInput.value = status.configPath;
 
                     // Show env override warning if applicable
@@ -259,6 +272,8 @@
 
                     // Populate fields
                     enabledChk.checked = status.enabled;
+                    enabledChk.disabled = !!status.envOverride;
+                    setDiscoveryFormLocked(configSection, envOverride, status.envOverride);
                     if (status.url) urlInput.value = status.url;
                     if (status.email) emailInput.value = status.email;
 
@@ -349,6 +364,8 @@
 
                     // Populate fields
                     enabledChk.checked = status.enabled;
+                    enabledChk.disabled = !!status.envOverride;
+                    setDiscoveryFormLocked(configSection, envOverride, status.envOverride);
                     if (status.url) urlInput.value = status.url;
                     if (status.username) usernameInput.value = status.username;
 
@@ -437,6 +454,8 @@
 
                     // Populate fields
                     enabledChk.checked = status.enabled;
+                    enabledChk.disabled = !!status.envOverride;
+                    setDiscoveryFormLocked(configSection, envOverride, status.envOverride);
                     if (status.url) urlInput.value = status.url;
 
                     // Show env override warning if applicable
@@ -510,84 +529,74 @@
         }
 
         // Save all discovery settings
+        async function saveDiscoverySource(name, checkboxId, path, body) {
+            // Environment-controlled sources cannot be edited from the UI.
+            if (document.getElementById(checkboxId).disabled) return;
+
+            const resp = await fetch(path, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                credentials: 'include'
+            });
+            if (!resp.ok) {
+                let detail = await resp.text();
+                try { detail = JSON.parse(detail).error || detail; } catch (_) { /* Plain-text response */ }
+                throw new Error(`${name}: ${detail || `HTTP ${resp.status}`}`);
+            }
+        }
+
         async function saveDiscoverySettings() {
             const btn = document.getElementById('saveDiscoveryConfig');
             btn.disabled = true;
             btn.textContent = 'Saving...';
+            const errors = [];
 
             try {
                 // Save Docker settings
-                await fetch('/api/admin/docker-discovery', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                await saveDiscoverySource('Docker discovery', 'dockerDiscoveryEnabled', '/api/admin/docker-discovery', {
                         enabled: document.getElementById('dockerDiscoveryEnabled').checked,
                         socketPath: document.getElementById('dockerSocketPath').value
-                    }),
-                    credentials: 'include'
-                });
+                }).catch(error => errors.push(error.message));
 
                 // Save Traefik settings
-                await fetch('/api/admin/traefik-discovery', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                await saveDiscoverySource('Traefik discovery', 'traefikDiscoveryEnabled', '/api/admin/traefik-discovery', {
                         enabled: document.getElementById('traefikDiscoveryEnabled').checked,
                         url: document.getElementById('traefikUrl').value,
                         username: document.getElementById('traefikUsername').value,
                         password: document.getElementById('traefikPassword').value
-                    }),
-                    credentials: 'include'
-                });
+                }).catch(error => errors.push(error.message));
 
                 // Save Nginx settings
-                await fetch('/api/admin/nginx-discovery', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                await saveDiscoverySource('Nginx discovery', 'nginxDiscoveryEnabled', '/api/admin/nginx-discovery', {
                         enabled: document.getElementById('nginxDiscoveryEnabled').checked,
                         configPath: document.getElementById('nginxConfigPath').value
-                    }),
-                    credentials: 'include'
-                });
+                }).catch(error => errors.push(error.message));
 
                 // Save NPM settings
-                await fetch('/api/admin/npm-discovery', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                await saveDiscoverySource('NPM discovery', 'npmDiscoveryEnabled', '/api/admin/npm-discovery', {
                         enabled: document.getElementById('npmDiscoveryEnabled').checked,
                         url: document.getElementById('npmUrl').value,
                         email: document.getElementById('npmEmail').value,
                         password: document.getElementById('npmPassword').value
-                    }),
-                    credentials: 'include'
-                });
+                }).catch(error => errors.push(error.message));
 
                 // Save Caddy settings
-                await fetch('/api/admin/caddy-discovery', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                await saveDiscoverySource('Caddy discovery', 'caddyDiscoveryEnabled', '/api/admin/caddy-discovery', {
                         enabled: document.getElementById('caddyDiscoveryEnabled').checked,
                         url: document.getElementById('caddyAdminUrl').value,
                         username: document.getElementById('caddyUsername').value,
                         password: document.getElementById('caddyPassword').value
-                    }),
-                    credentials: 'include'
-                });
+                }).catch(error => errors.push(error.message));
 
                 // Save Unraid settings
-                await fetch('/api/admin/unraid-discovery', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                await saveDiscoverySource('Unraid discovery', 'unraidDiscoveryEnabled', '/api/admin/unraid-discovery', {
                         enabled: document.getElementById('unraidDiscoveryEnabled').checked,
                         url: document.getElementById('unraidUrl').value,
                         apiKey: document.getElementById('unraidApiKey').value
-                    }),
-                    credentials: 'include'
-                });
+                }).catch(error => errors.push(error.message));
+
+                if (errors.length) throw new Error(errors.join('; '));
 
                 showToast('Discovery settings saved successfully');
                 clearDiscoveryDirty();
@@ -602,6 +611,7 @@
 
             } catch (e) {
                 showToast('Error saving settings: ' + e.message);
+                btn.disabled = false;
             } finally {
                 btn.textContent = 'Save Discovery Settings';
             }
@@ -990,7 +1000,7 @@
             if (!app) return;
 
             adminState.editingApp = app;
-            document.getElementById('editAppTitle').textContent = `Edit Access: ${escapeHtml(app.name)}`;
+            document.getElementById('editAppTitle').textContent = `Edit Access: ${app.name}`;
             document.getElementById('editAppUrl').value = url;
 
             const container = document.getElementById('appGroupCheckboxes');

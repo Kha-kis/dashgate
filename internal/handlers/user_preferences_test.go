@@ -113,6 +113,36 @@ func TestProxyUserPreferencesPersistAndStaySeparate(t *testing.T) {
 	}
 }
 
+func TestPreferenceWriteRejectsStaleBrowserIdentity(t *testing.T) {
+	app := setupTestAppWithDB(t)
+	app.SystemConfig.ProxyAuthEnabled = true
+	app.SystemConfig.TrustedProxies = "127.0.0.1"
+	app.TrustedProxyIPs = []net.IP{net.ParseIP("127.0.0.1")}
+	handler := UserPreferencesHandler(app)
+
+	r := httptest.NewRequest(http.MethodPut, "/api/user/preferences", strings.NewReader(`{"myApps":[{"name":"Alice","url":"https://example.test"}]}`))
+	r.RemoteAddr = "127.0.0.1:12345"
+	r.Header.Set("Remote-User", "proxy-bob")
+	r.Header.Set("X-DashGate-Expected-Source", "proxy")
+	r.Header.Set("X-DashGate-Expected-Username", "proxy-alice")
+	w := httptest.NewRecorder()
+	handler(w, r)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("stale preference write: status %d, body %s", w.Code, w.Body.String())
+	}
+	id, err := database.GetUserIDByUsername(app, "proxy-bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows int
+	if err := app.DB.QueryRow("SELECT COUNT(*) FROM user_preferences WHERE user_id = ?", id).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 {
+		t.Fatalf("stale write created %d preference rows for the active account", rows)
+	}
+}
+
 func TestProxyUserCannotOverwriteAnotherAuthSource(t *testing.T) {
 	app := setupTestAppWithDB(t)
 	app.SystemConfig.ProxyAuthEnabled = true
