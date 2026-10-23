@@ -171,6 +171,9 @@ test.describe("Admin Panel", () => {
     await page.locator('#discoveredAppsList').getByRole('button', { name: 'Dismiss' }).click();
     await expect(page.locator('#toast')).toContainText('Saved, but refresh failed');
     await expect(page.locator('#discoveredAppsList')).toContainText('Webhook');
+    await page.getByRole('button', { name: 'Refresh discovered list' }).click();
+    await expect(page.locator('#toast')).toContainText('Failed to refresh discovered apps');
+    await expect(page.locator('#discoveredAppsList')).toContainText('Webhook');
     refreshFails = false;
     await page.getByRole('button', { name: 'Refresh discovered list' }).click();
     await expect(page.locator('#discoveredAppsList')).not.toContainText('Webhook');

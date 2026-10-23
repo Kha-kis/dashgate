@@ -636,6 +636,14 @@
             await loadAccessUsers();
         }
 
+        async function refreshDiscoveredAppsData() {
+            try {
+                await loadDiscoveredAppsData(true);
+            } catch (e) {
+                showToast('Failed to refresh discovered apps. Try again.');
+            }
+        }
+
         function renderDiscoveredAppsList() {
             const container = document.getElementById('discoveredAppsList');
             const badge = document.getElementById('discoveredCountBadge');
