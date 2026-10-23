@@ -54,5 +54,5 @@
 
 - [x] Run JavaScript syntax checks, Go tests/vet/build, and the relevant Playwright suite.
 - [x] Review changed code and documentation for security and regressions. Addressed the account-switch write boundary, pending-copy lockout, malformed imports, and ordered write handling found during review.
-- [ ] Commit, open a PR with issue mapping and evidence, and check CI.
-- [ ] Review release scope, documentation, and version choice; leave tagging and deployment for the release decision.
+- [x] Commit, open a PR with issue mapping and evidence, and check CI.
+- [x] Review release scope, documentation, and version choice; propose v1.5.3 after merge and leave tagging and deployment for the release decision.

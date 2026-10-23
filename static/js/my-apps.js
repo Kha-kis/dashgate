@@ -95,10 +95,17 @@
         }
 
         async function discardPendingMyApps() {
-            if (!getPendingMyApps() || !prefsSyncEnabled) return;
-            await preferenceWriteTail;
-            if (!getPendingMyApps()) return;
+            if (!getPendingMyApps() || !prefsSyncEnabled || myAppsDiscardInProgress) return;
+            const hadDelayedWrite = _syncTimeout !== null;
+            clearTimeout(_syncTimeout);
+            _syncTimeout = null;
+            const wasRecoveryRequired = pendingMyAppsRecoveryRequired;
+            myAppsDiscardInProgress = true;
+            pendingMyAppsRecoveryRequired = true;
+            let discarded = false;
             try {
+                await preferenceWriteTail;
+                if (!getPendingMyApps()) return;
                 const identityResponse = await fetch('/api/auth/me', { credentials: 'include' });
                 if (!identityResponse.ok) throw new Error(`HTTP ${identityResponse.status}`);
                 const activeUser = await identityResponse.json();
@@ -112,18 +119,25 @@
                 const current = Array.isArray(serverPrefs.myApps) ? serverPrefs.myApps : [];
                 if (!confirm(`Discard your unsynced browser My Apps and keep the current account list?\n\nCurrent account apps:\n${describePersonalApps(current)}\n\nUnsynced browser apps:\n${describePersonalApps(getPendingMyApps() || [])}`)) return;
                 localStorage.removeItem(myAppsPendingKey());
-                pendingMyAppsRecoveryRequired = false;
                 myApps = current;
                 localStorage.setItem('dashgate-my-apps', JSON.stringify(myApps));
+                discarded = true;
                 renderMyAppsList();
                 renderMyAppsOnDashboard();
                 showToast('Current account apps kept');
             } catch (_) {
                 showToast('Could not check account apps. Try again.');
+            } finally {
+                pendingMyAppsRecoveryRequired = !discarded && !!getPendingMyApps() && wasRecoveryRequired;
+                myAppsDiscardInProgress = false;
+                const needsSync = syncAttemptedDuringDiscard || (hadDelayedWrite && !discarded);
+                syncAttemptedDuringDiscard = false;
+                if (needsSync) debouncedSyncPreferences();
             }
         }
 
         async function retryMyAppsSync() {
+            if (myAppsDiscardInProgress) return;
             const pending = getPendingMyApps();
             if (!pending || !prefsSyncEnabled) return;
             if (!validPersonalApps(pending)) {

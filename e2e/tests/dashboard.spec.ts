@@ -292,6 +292,32 @@ test.describe('DashGate UI', () => {
     await expect(page.locator('#myAppsSection')).toContainText('Editable Again');
   });
 
+  test('discard before a delayed sync cannot write the discarded apps', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
+    const initialPrefs = await (await page.request.get('/api/user/preferences')).json();
+    const initialApps = initialPrefs.myApps || [];
+    let writes = 0;
+    await page.route('**/api/user/preferences', async route => {
+      if (route.request().method() === 'PUT') writes++;
+      if (route.request().method() === 'GET') await new Promise(resolve => setTimeout(resolve, 700));
+      await route.continue();
+    });
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="favorites"]').click();
+    await page.locator('button[onclick="openMyAppModal()"]').click();
+    await page.locator('#myAppName').fill('Discard Me');
+    await page.locator('#myAppUrl').fill('https://discard.example.test');
+    await page.locator('#myAppModal .admin-btn-primary').click();
+    await expect(page.locator('#myAppsPendingNotice')).toBeVisible();
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#discardPendingMyApps').click();
+    await expect(page.locator('#myAppsPendingNotice')).toBeHidden();
+    await page.waitForTimeout(650);
+    expect(writes).toBe(0);
+    const prefs = await (await page.request.get('/api/user/preferences')).json();
+    expect(prefs.myApps || []).toEqual(initialApps);
+  });
+
   test('invalid personal app import does not create a pending copy', async ({ page }) => {
     await page.waitForLoadState('networkidle');
     await page.locator('.dock-item').nth(4).click();

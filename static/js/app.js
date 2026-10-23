@@ -195,8 +195,14 @@ function markMyAppsPending() {
 
 // Serialize preference writes so an older request cannot finish after a newer edit.
 let preferenceWriteTail = Promise.resolve();
+let myAppsDiscardInProgress = false;
+let syncAttemptedDuringDiscard = false;
 function syncPreferencesToServer(preferences = null) {
   if (!prefsSyncEnabled) return Promise.resolve(false);
+  if (myAppsDiscardInProgress) {
+    syncAttemptedDuringDiscard = true;
+    return Promise.resolve(false);
+  }
   const body = JSON.stringify(preferences || {
     settings: settings,
     favorites: favorites,
@@ -248,7 +254,10 @@ function syncPreferencesToServer(preferences = null) {
 let _syncTimeout = null;
 function debouncedSyncPreferences() {
   clearTimeout(_syncTimeout);
-  _syncTimeout = setTimeout(syncPreferencesToServer, 500);
+  _syncTimeout = setTimeout(() => {
+    _syncTimeout = null;
+    syncPreferencesToServer();
+  }, 500);
 }
 
 function initApps() {
