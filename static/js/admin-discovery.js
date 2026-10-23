@@ -631,6 +631,7 @@
             } catch (e) {
                 console.error('Failed to load discovered apps:', e);
             }
+            await loadAccessUsers();
         }
 
         function renderDiscoveredAppsList() {

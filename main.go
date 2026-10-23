@@ -242,6 +242,9 @@ func main() {
 	mux.HandleFunc("/api/admin/users", auth.RequireAdmin(app, handlers.AdminLLDAPUsersHandler(app)))
 	mux.HandleFunc("/api/admin/groups", auth.RequireAdmin(app, handlers.AdminLLDAPGroupsHandler(app)))
 	mux.HandleFunc("/api/admin/apps", auth.RequireAdmin(app, handlers.AdminAppsHandler(app)))
+	mux.HandleFunc("/api/admin/access-users", auth.RequireAdmin(app, handlers.AccessUsersHandler(app)))
+	mux.HandleFunc("/api/admin/access-apps", auth.RequireAdmin(app, handlers.AccessAppsHandler(app)))
+	mux.HandleFunc("/api/admin/access-check", auth.RequireAdmin(app, handlers.AccessCheckHandler(app)))
 	mux.HandleFunc("/api/admin/apps/mapping", auth.RequireAdmin(app, handlers.AdminAppMappingHandler(app)))
 
 	// Local user management
