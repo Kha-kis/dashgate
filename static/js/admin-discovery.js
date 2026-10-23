@@ -619,19 +619,19 @@
         }
 
         // Discovered Apps Management
-        async function loadDiscoveredAppsData() {
+        async function loadDiscoveredAppsData(throwOnError = false) {
             try {
                 const resp = await fetch('/api/admin/discovered-apps', { credentials: 'include' });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    adminState.discoveredApps = data.active || [];
-                    adminState.staleOverrides = data.stale || [];
-                    adminState.ignoredDiscoveredApps = data.ignored || [];
-                    renderDiscoveredAppsList();
-                    renderAppsList();
-                }
+                if (!resp.ok) throw new Error(`List refresh failed (${resp.status})`);
+                const data = await resp.json();
+                adminState.discoveredApps = data.active || [];
+                adminState.staleOverrides = data.stale || [];
+                adminState.ignoredDiscoveredApps = data.ignored || [];
+                renderDiscoveredAppsList();
+                renderAppsList();
             } catch (e) {
                 console.error('Failed to load discovered apps:', e);
+                if (throwOnError) throw e;
             }
             await loadAccessUsers();
         }
@@ -718,7 +718,7 @@
                     : '';
 
                 return `
-                    <div class="discovered-app-item${isSelected ? ' selected' : ''}" data-url="${escapeHtml(app.url)}">
+                    <div class="discovered-app-item${isSelected ? ' selected' : ''}" data-url="${escapeHtml(app.url)}" data-discovery-key="${escapeHtml(key)}">
                         <label class="discovered-app-checkbox" onclick="event.stopPropagation()">
                             <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleDiscoveredAppSelection('${encodeURIComponent(key).replace(/'/g, '%27')}')">
                         </label>
@@ -791,7 +791,12 @@
                     throw new Error(body.error || `Request failed (${resp.status})`);
                 }
                 if (action === 'dismiss') clearDiscoveredSelection();
-                await loadDiscoveredAppsData();
+                try {
+                    await loadDiscoveredAppsData(true);
+                } catch (e) {
+                    showToast('Saved, but refresh failed. Use Refresh discovered list to retry.');
+                    return;
+                }
                 showToast(action === 'dismiss' ? `${items.length} app(s) dismissed` : 'App restored');
             } catch (e) {
                 showToast('Error: ' + e.message);
@@ -1144,6 +1149,9 @@
                 adminState.selectedDiscoveredApps.add(key);
             }
             renderDiscoveredAppsList();
+            const replacement = Array.from(document.querySelectorAll('#discoveredAppsList .discovered-app-item'))
+                .find(item => item.dataset.discoveryKey === key);
+            replacement?.querySelector('input[type="checkbox"]')?.focus();
             updateSelectAllCheckbox();
         }
 

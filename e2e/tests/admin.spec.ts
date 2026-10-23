@@ -149,6 +149,49 @@ test.describe("Admin Panel", () => {
     expect(submitted).toEqual([{ source: 'nginx', url }]);
   });
 
+  test("discovery inbox reports a saved action when refresh fails and can retry", async ({ page }) => {
+    let ignored = false;
+    let refreshFails = false;
+    await page.route('**/api/admin/discovered-apps', route => {
+      if (refreshFails) return route.fulfill({ status: 500, json: { error: 'Refresh unavailable' } });
+      return route.fulfill({ json: {
+        active: [{ name: 'Webhook', url: 'https://hook.test', source: 'nginx', icon: '', description: '' }],
+        stale: [], ignored: ignored ? [{ name: 'Webhook', url: 'https://hook.test', source: 'nginx' }] : [],
+      } });
+    });
+    await page.route('**/api/admin/discovered-apps/ignored', async route => {
+      ignored = true;
+      refreshFails = true;
+      await route.fulfill({ json: { status: 'ok' } });
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await page.locator('#discoveredAppsList').getByRole('button', { name: 'Dismiss' }).click();
+    await expect(page.locator('#toast')).toContainText('Saved, but refresh failed');
+    await expect(page.locator('#discoveredAppsList')).toContainText('Webhook');
+    refreshFails = false;
+    await page.getByRole('button', { name: 'Refresh discovered list' }).click();
+    await expect(page.locator('#discoveredAppsList')).not.toContainText('Webhook');
+    await expect(page.locator('#discoveredIgnoredSection')).toContainText('Webhook');
+  });
+
+  test("discovery inbox keeps keyboard focus after selecting a route", async ({ page }) => {
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: { active: [
+      { name: 'Webhook', url: 'https://hook.test', source: 'nginx', icon: '', description: '' },
+    ], stale: [], ignored: [] } }));
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    const checkbox = page.locator('#discoveredAppsList .discovered-app-item input[type="checkbox"]');
+    await checkbox.focus();
+    await page.keyboard.press('Space');
+    await expect(checkbox).toBeChecked();
+    expect(await checkbox.evaluate(element => document.activeElement === element)).toBe(true);
+  });
+
   test("discovery save reports an environment-controlled source rejection", async ({ page }) => {
     await page.route('**/api/admin/docker-discovery', async route => {
       if (route.request().method() === 'PUT') {
