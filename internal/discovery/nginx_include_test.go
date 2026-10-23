@@ -53,3 +53,27 @@ func TestResolveIncludesLimitsRepeatedPermissionWarnings(t *testing.T) {
 		t.Fatalf("warnings after one hour = %d, want 2", len(warnings))
 	}
 }
+
+func TestResolveIncludesStillLogsOtherReadFailures(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "changed.conf")
+	if err := os.WriteFile(path, []byte("server_name changed.example;"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var warnings []string
+	resolver := includeResolver{
+		readFile: func(name string) ([]byte, error) {
+			return nil, &os.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+		},
+		logf: func(format string, args ...any) {
+			warnings = append(warnings, fmt.Sprintf(format, args...))
+		},
+		warnings: &includeWarningLimiter{},
+		now:      time.Now,
+	}
+	input := fmt.Sprintf("include %s;", path)
+	resolver.resolve(input, 0)
+	resolver.resolve(input, 0)
+	if len(warnings) != 2 {
+		t.Fatalf("warnings = %d, want one for each read failure", len(warnings))
+	}
+}
