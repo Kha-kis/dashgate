@@ -47,6 +47,12 @@ class DeploymentTests(unittest.TestCase):
             health_url="http://127.0.0.1:1738/health",
         )
 
+    def rendered_compose(self, source=None):
+        return json.dumps({"services": {"dashgate": {"image": OLD, "volumes": [{
+            "type": "bind", "source": str(source or self.data.resolve()),
+            "target": "/config", "read_only": False,
+        }]}}})
+
     def test_rejects_wrong_current_pin_without_writes(self):
         self.config.expected_image = "ghcr.io/kha-kis/dashgate@sha256:" + "3" * 64
         calls = []
@@ -71,7 +77,27 @@ class DeploymentTests(unittest.TestCase):
         self.assertNotIn("dashgate.db", names)
         self.assertNotIn("dashgate.db-wal", names)
         self.assertNotIn("dashgate.db-shm", names)
+        self.assertNotIn("dashgate.db-journal", names)
+        self.assertIn("dashgate.db-journal", deploy_compose.DB_FILES)
         deploy_compose.verify_backup(backup)
+
+    def test_existing_backup_root_permissions_are_preserved(self):
+        self.backups.mkdir()
+        before = self.backups.stat().st_mode & 0o777
+        deploy_compose.create_backup(self.config, stamp="20261024T120000Z")
+        self.assertEqual(self.backups.stat().st_mode & 0o777, before)
+
+    def test_rejects_data_dir_that_is_not_compose_bind_mount(self):
+        other = self.root / "other-data"
+        other.mkdir()
+        calls = []
+        def run(args):
+            calls.append(args)
+            return self.rendered_compose(source=other) if args[-3:] == ["config", "--format", "json"] else ""
+        with self.assertRaisesRegex(ValueError, "bind mount"):
+            deploy_compose.deploy(self.config, run=run)
+        self.assertFalse(self.backups.exists())
+        self.assertEqual(self.compose.read_text(), self.original)
 
     def test_compose_replacement_changes_only_exact_pin(self):
         deploy_compose.replace_compose_image(self.config)
@@ -83,7 +109,9 @@ class DeploymentTests(unittest.TestCase):
         def run(args):
             calls.append(args)
             if args[-3:] == ["config", "--format", "json"]:
-                return json.dumps({"services": {"dashgate": {"image": OLD}}})
+                return self.rendered_compose()
+            if args[-1] == "{{.Config.Image}}":
+                return NEW
             return "healthy" if args[:2] == ["docker", "inspect"] else ""
 
         result = deploy_compose.deploy(
@@ -98,11 +126,27 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn(["docker", "pull", NEW], calls)
         self.assertIn(["docker", "compose", "-f", str(self.compose), "up", "-d", "--no-deps", "dashgate"], calls)
         self.assertEqual(calls[0][-2:], ["config", "-q"])
+        self.assertIn(["docker", "inspect", "dashgate", "--format", "{{.Config.Image}}"], calls)
+
+    def test_wrong_running_image_fails_after_recreate(self):
+        def run(args):
+            if args[-3:] == ["config", "--format", "json"]:
+                return self.rendered_compose()
+            if args[-1] == "{{.Config.Image}}":
+                return OLD
+            return "healthy" if args[:2] == ["docker", "inspect"] else ""
+        with self.assertRaisesRegex(deploy_compose.DeploymentError, "running image"):
+            deploy_compose.deploy(self.config, run=run,
+                fetch_health=lambda url: {"status": "ok", "version": "1.5.6"},
+                sleep=lambda seconds: None, attempts=1)
+        self.assertEqual(len(list(self.backups.iterdir())), 1)
 
     def test_wrong_health_version_keeps_verified_backup_and_reports_it(self):
         def run(args):
             if args[-3:] == ["config", "--format", "json"]:
-                return json.dumps({"services": {"dashgate": {"image": OLD}}})
+                return self.rendered_compose()
+            if args[-1] == "{{.Config.Image}}":
+                return NEW
             return "healthy" if args[:2] == ["docker", "inspect"] else ""
 
         with self.assertRaises(deploy_compose.DeploymentError) as caught:
@@ -123,7 +167,7 @@ class DeploymentTests(unittest.TestCase):
         def run(args):
             calls.append(args)
             if args[-3:] == ["config", "--format", "json"]:
-                return json.dumps({"services": {"dashgate": {"image": OLD}}})
+                return self.rendered_compose()
             if args[-2:] == ["config", "-q"] and len([call for call in calls if call[-2:] == ["config", "-q"]]) == 2:
                 raise RuntimeError("invalid Compose")
             return ""

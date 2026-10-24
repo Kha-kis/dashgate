@@ -24,7 +24,7 @@ from urllib.request import urlopen
 
 IMAGE_RE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}$")
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
-DB_FILES = {"dashgate.db", "dashgate.db-wal", "dashgate.db-shm"}
+DB_FILES = {"dashgate.db", "dashgate.db-wal", "dashgate.db-shm", "dashgate.db-journal"}
 BACKUP_FILES = ("dashgate.db", "data-files.tar", "docker-compose.yml", ".env")
 
 
@@ -125,8 +125,10 @@ def verify_backup(backup_dir: Path) -> None:
 
 
 def create_backup(config: Config, stamp: str | None = None) -> Path:
-    config.backup_root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(config.backup_root, 0o700)
+    # Only set permissions on directories created by this invocation.
+    if not config.backup_root.exists():
+        config.backup_root.mkdir(mode=0o700, parents=True)
+        os.chmod(config.backup_root, 0o700)
     stamp = stamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup_dir = config.backup_root / f"dashgate-{config.target_version}-{stamp}"
     backup_dir.mkdir(mode=0o700)
@@ -180,8 +182,14 @@ def deploy(
     compose_command = ["docker", "compose", "-f", str(config.compose)]
     run(compose_command + ["config", "-q"])
     rendered = json.loads(run(compose_command + ["config", "--format", "json"]))
-    if rendered.get("services", {}).get("dashgate", {}).get("image") != config.expected_image:
+    service = rendered.get("services", {}).get("dashgate", {})
+    if service.get("image") != config.expected_image:
         raise ValueError("current image for DashGate service does not match expected pin")
+    config_mounts = [volume for volume in service.get("volumes", []) if volume.get("target") == "/config"]
+    if (len(config_mounts) != 1 or config_mounts[0].get("type") != "bind"
+            or config_mounts[0].get("read_only", False)
+            or Path(config_mounts[0].get("source", "")).resolve() != config.data_dir.resolve()):
+        raise ValueError("DashGate /config bind mount does not match the writable data directory")
     backup_dir = create_backup(config)
     try:
         run(["docker", "pull", config.target_image])
@@ -198,6 +206,9 @@ def deploy(
                 try:
                     health = fetch_health(config.health_url)
                     if health.get("status") == "ok" and health.get("version") == config.target_version:
+                        running_image = run(["docker", "inspect", "dashgate", "--format", "{{.Config.Image}}"])
+                        if running_image != config.target_image:
+                            raise DeploymentError("running image does not match target digest")
                         quick_check(config.data_dir / "dashgate.db")
                         return DeploymentResult(backup_dir, config.target_image, config.target_version)
                 except (OSError, ValueError, json.JSONDecodeError):

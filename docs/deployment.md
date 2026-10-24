@@ -25,7 +25,7 @@ python3 /tmp/dashgate-deploy.py \
   --target-version 1.5.5
 ```
 
-The script checks the current image and SQLite database before making changes. It creates a timestamped mode-0700 backup containing a consistent database snapshot, the other data files, Compose, `.env`, and checksums. It verifies the backup, pulls the target image, updates only DashGate's image pin, validates Compose, and recreates only `dashgate` with `--no-deps`. It succeeds only after Docker reports healthy, `/health` reports the target version, and SQLite quick check returns `ok`.
+The script checks the current image, the Compose `/config` bind mount, and SQLite database before making changes. It creates a timestamped mode-0700 backup containing a consistent database snapshot, the other data files, Compose, `.env`, and checksums. It verifies the backup, pulls the target image, updates only DashGate's image pin, validates Compose, and recreates only `dashgate` with `--no-deps`. It succeeds only after Docker reports healthy, the running container uses the target image digest, `/health` reports the target version, and SQLite quick check returns `ok`.
 
 The backup contains configuration and secrets. Keep it on protected storage, include it in your normal backup policy, and remove it only under that policy. The script does not print secret values or delete older backups.
 
@@ -53,4 +53,4 @@ docker compose -f /opt/dashgate/docker-compose.yml config -q
 docker compose -f /opt/dashgate/docker-compose.yml up -d --no-deps dashgate
 ```
 
-If the database must also be restored, stop **only** DashGate, move the live database and its `-wal`/`-shm` files into a separate timestamped recovery directory, copy `BACKUP_DIR/dashgate.db` into the data directory, and run `PRAGMA quick_check` before starting the old image. Restore the archived config and icons only if their post-backup changes can be discarded. Never copy a database snapshot over a running SQLite database or leave an old WAL beside the restored snapshot. Keep both the pre-upgrade backup and the moved live files until the recovered service has been verified.
+If the database must also be restored, stop **only** DashGate, move the live database and its `-wal`/`-shm`/`-journal` files into a separate timestamped recovery directory, copy `BACKUP_DIR/dashgate.db` into the data directory, and run `PRAGMA quick_check` before starting the old image. Restore the archived config and icons only if their post-backup changes can be discarded. Never copy a database snapshot over a running SQLite database or leave an old WAL beside the restored snapshot. Keep both the pre-upgrade backup and the moved live files until the recovered service has been verified.
