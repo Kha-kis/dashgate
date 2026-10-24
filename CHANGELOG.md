@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.5.6] - 2026-10-24
+
+### Improved
+
+- **Discovery inbox navigation** — the existing search and source filters now include Ignored routes. The Ignored section shows the number of matching routes, including entries that are no longer discovered, and Restore works with filters active.
+
+### Operations
+
+- **Repeatable Compose upgrades** — added a deployment helper and recovery runbook for existing digest-pinned installations. The helper verifies the data bind mount, creates and checks a consistent SQLite backup, upgrades only DashGate, and checks the running image, health version, and database before reporting success.
+
 ## [1.5.5] - 2026-10-23
 
 ### Added

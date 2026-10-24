@@ -6,7 +6,7 @@ The script is intentionally for an **existing** installation with a digest-pinne
 
 ## Before the upgrade
 
-1. Review the release and its CI. Find the target image's full multiarchitecture digest in the trusted registry, for example with `docker buildx imagetools inspect ghcr.io/kha-kis/dashgate:1.5.5`. Record the full `sha256:` value. Do not use a mutable `latest` tag for the deployment.
+1. Review the release and its CI. Find the target image's full multiarchitecture digest in the trusted registry, for example with `docker buildx imagetools inspect ghcr.io/kha-kis/dashgate:1.5.6`. Record the full `sha256:` value. Do not use a mutable `latest` tag for the deployment.
 2. Confirm the host paths, the current container image (`docker inspect dashgate --format '{{.Config.Image}}'`), available disk space, and the current `/health` version. The current image must equal the image in Compose.
 3. Transfer the checked-in script to the host, for example `scp scripts/deploy_compose.py media:/tmp/dashgate-deploy.py`. Transferring the file avoids shell quoting and Windows line-ending problems. Review the script from the same Git revision as the release before running it.
 
@@ -22,7 +22,7 @@ python3 /tmp/dashgate-deploy.py \
   --backup-root /home/khak1s/dashgate-backups \
   --expect-image "$current_image" \
   --target-image "$target_image" \
-  --target-version 1.5.5
+  --target-version 1.5.6
 ```
 
 The script checks the current image, the Compose `/config` bind mount, and SQLite database before making changes. It creates a timestamped mode-0700 backup containing a consistent database snapshot, the other data files, Compose, `.env`, and checksums. It verifies the backup, pulls the target image, updates only DashGate's image pin, validates Compose, and recreates only `dashgate` with `--no-deps`. It succeeds only after Docker reports healthy, the running container uses the target image digest, `/health` reports the target version, and SQLite quick check returns `ok`.
