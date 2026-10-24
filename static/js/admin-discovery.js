@@ -619,20 +619,29 @@
         }
 
         // Discovered Apps Management
-        async function loadDiscoveredAppsData() {
+        async function loadDiscoveredAppsData(throwOnError = false) {
             try {
                 const resp = await fetch('/api/admin/discovered-apps', { credentials: 'include' });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    adminState.discoveredApps = data.active || [];
-                    adminState.staleOverrides = data.stale || [];
-                    renderDiscoveredAppsList();
-                    renderAppsList();
-                }
+                if (!resp.ok) throw new Error(`List refresh failed (${resp.status})`);
+                const data = await resp.json();
+                adminState.discoveredApps = data.active || [];
+                adminState.staleOverrides = data.stale || [];
+                adminState.ignoredDiscoveredApps = data.ignored || [];
+                renderDiscoveredAppsList();
+                renderAppsList();
             } catch (e) {
                 console.error('Failed to load discovered apps:', e);
+                if (throwOnError) throw e;
             }
             await loadAccessUsers();
+        }
+
+        async function refreshDiscoveredAppsData() {
+            try {
+                await loadDiscoveredAppsData(true);
+            } catch (e) {
+                showToast('Failed to refresh discovered apps. Try again.');
+            }
         }
 
         function renderDiscoveredAppsList() {
@@ -642,14 +651,19 @@
             const sourceFilter = adminState.discoveredSourceFilter || 'all';
 
             const allDiscovered = adminState.discoveredApps || [];
+            const ignored = adminState.ignoredDiscoveredApps || [];
+            const ignoredKeys = new Set(ignored.map(a => discoveredAppKey(a)));
 
             // Inbox: only unconfigured apps OR hidden apps
-            let apps = allDiscovered.filter(a => !a.override || a.override.hidden);
+            let apps = allDiscovered.filter(a => (!a.override || a.override.hidden) && !ignoredKeys.has(discoveredAppKey(a)));
 
             if (allDiscovered.length === 0) {
                 container.innerHTML = '<div class="admin-empty">No discovered apps. Enable a discovery source in the Discovery settings.</div>';
                 badge.style.display = 'none';
-                document.getElementById('discoveredStaleSection').style.display = 'none';
+                adminState.filteredDiscoveredApps = [];
+                renderIgnoredDiscoveredApps();
+                renderStaleOverrides();
+                updateBulkActionBar();
                 return;
             }
 
@@ -676,8 +690,11 @@
             }
 
             if (apps.length === 0) {
-                container.innerHTML = '<div class="admin-empty">No unconfigured discovered apps. All discovered apps have been configured.</div>';
+                container.innerHTML = '<div class="admin-empty">No actionable discovered apps.</div>';
+                adminState.filteredDiscoveredApps = [];
+                renderIgnoredDiscoveredApps();
                 renderStaleOverrides();
+                updateBulkActionBar();
                 return;
             }
 
@@ -688,7 +705,8 @@
                 const override = app.override;
                 const displayName = override?.nameOverride || app.name;
                 const icon = override?.iconOverride || app.icon;
-                const isSelected = adminState.selectedDiscoveredApps?.has(app.url);
+                const key = discoveredAppKey(app);
+                const isSelected = adminState.selectedDiscoveredApps?.has(key);
 
                 const iconHtml = icon
                     ? `<img src="/static/icons/${escapeHtml(icon)}" alt="" onerror="this.parentElement.innerHTML='<span style=\\'color:var(--text-tertiary);font-size:14px;\\'>${escapeHtml(displayName.charAt(0).toUpperCase())}</span>'">`
@@ -708,9 +726,9 @@
                     : '';
 
                 return `
-                    <div class="discovered-app-item${isSelected ? ' selected' : ''}" data-url="${escapeHtml(app.url)}">
+                    <div class="discovered-app-item${isSelected ? ' selected' : ''}" data-url="${escapeHtml(app.url)}" data-discovery-key="${escapeHtml(key)}">
                         <label class="discovered-app-checkbox" onclick="event.stopPropagation()">
-                            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleDiscoveredAppSelection('${encodeURIComponent(app.url)}')">
+                            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleDiscoveredAppSelection('${encodeURIComponent(key).replace(/'/g, '%27')}')">
                         </label>
                         <div class="discovered-app-icon">${iconHtml}</div>
                         <div class="discovered-app-info">
@@ -722,6 +740,7 @@
                             </div>
                         </div>
                         <div class="admin-item-actions">
+                            <button class="admin-action-btn discovery-text-action" onclick="dismissDiscoveredApp('${encodeURIComponent(app.source).replace(/'/g, '%27')}', '${encodeURIComponent(app.url).replace(/'/g, '%27')}')" title="Dismiss" aria-label="Dismiss">Dismiss</button>
                             <button class="admin-action-btn" onclick="openDiscoveredAppModal('${encodeURIComponent(app.url)}')" title="Configure">
                                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -736,7 +755,72 @@
 
             updateBulkActionBar();
 
+            renderIgnoredDiscoveredApps();
             renderStaleOverrides();
+        }
+
+        function discoveredAppKey(app) {
+            return JSON.stringify([app.source, app.url]);
+        }
+
+        function renderIgnoredDiscoveredApps() {
+            const section = document.getElementById('discoveredIgnoredSection');
+            if (!section) return;
+            const ignored = adminState.ignoredDiscoveredApps || [];
+            if (ignored.length === 0) {
+                section.innerHTML = '';
+                return;
+            }
+            const activeKeys = new Set((adminState.discoveredApps || []).map(a => discoveredAppKey(a)));
+            const wasOpen = section.querySelector('details')?.open || false;
+            section.innerHTML = `<details ${wasOpen ? 'open' : ''}>
+                <summary>Ignored (${ignored.length} ignored)</summary>
+                <p class="settings-desc">Dismissed routes stay here until restored.</p>
+                ${ignored.map(app => `<div class="discovered-app-item">
+                    <div class="discovered-app-info">
+                        <div class="discovered-app-name">${escapeHtml(app.name || app.url)}</div>
+                        <div class="discovered-app-url">${escapeHtml(app.url)}</div>
+                        <div class="discovered-app-badges"><span class="discovered-source-badge">${escapeHtml(app.source)}</span>
+                            ${activeKeys.has(discoveredAppKey(app)) ? '' : '<span class="discovered-status-badge">No longer discovered</span>'}</div>
+                    </div>
+                    <div class="admin-item-actions"><button class="admin-action-btn discovery-text-action" onclick="restoreDiscoveredApp('${encodeURIComponent(app.source).replace(/'/g, '%27')}', '${encodeURIComponent(app.url).replace(/'/g, '%27')}')">Restore</button></div>
+                </div>`).join('')}
+            </details>`;
+        }
+
+        async function changeIgnoredDiscoveredApps(action, items) {
+            try {
+                const resp = await fetch('/api/admin/discovered-apps/ignored', {
+                    method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, items })
+                });
+                if (!resp.ok) {
+                    const body = await resp.json().catch(() => ({}));
+                    throw new Error(body.error || `Request failed (${resp.status})`);
+                }
+                if (action === 'dismiss') clearDiscoveredSelection();
+                try {
+                    await loadDiscoveredAppsData(true);
+                } catch (e) {
+                    showToast('Saved, but refresh failed. Use Refresh discovered list to retry.');
+                    return;
+                }
+                showToast(action === 'dismiss' ? `${items.length} app(s) dismissed` : 'App restored');
+            } catch (e) {
+                showToast('Error: ' + e.message);
+            }
+        }
+
+        window.dismissDiscoveredApp = (source, url) => changeIgnoredDiscoveredApps('dismiss', [{ source: decodeURIComponent(source), url: decodeURIComponent(url) }]);
+        window.restoreDiscoveredApp = (source, url) => changeIgnoredDiscoveredApps('restore', [{ source: decodeURIComponent(source), url: decodeURIComponent(url) }]);
+        window.dismissSelectedDiscoveredApps = function() {
+            const items = Array.from(adminState.selectedDiscoveredApps || [], key => {
+                const [source, url] = JSON.parse(key);
+                return { source, url };
+            });
+            if (items.length === 0) return;
+            if (items.length > 100) { showToast('Select at most 100 apps'); return; }
+            return changeIgnoredDiscoveredApps('dismiss', items);
         }
 
         function renderStaleOverrides() {
@@ -1062,24 +1146,20 @@
 
         // Bulk selection functions (exposed globally for onclick handlers)
         window.toggleDiscoveredAppSelection = function(encodedUrl) {
-            const url = decodeURIComponent(encodedUrl);
+            const key = decodeURIComponent(encodedUrl);
             if (!adminState.selectedDiscoveredApps) {
                 adminState.selectedDiscoveredApps = new Set();
             }
 
-            if (adminState.selectedDiscoveredApps.has(url)) {
-                adminState.selectedDiscoveredApps.delete(url);
+            if (adminState.selectedDiscoveredApps.has(key)) {
+                adminState.selectedDiscoveredApps.delete(key);
             } else {
-                adminState.selectedDiscoveredApps.add(url);
+                adminState.selectedDiscoveredApps.add(key);
             }
-
-            // Update visual state
-            const item = document.querySelector(`.discovered-app-item[data-url="${CSS.escape(url)}"]`);
-            if (item) {
-                item.classList.toggle('selected', adminState.selectedDiscoveredApps.has(url));
-            }
-
-            updateBulkActionBar();
+            renderDiscoveredAppsList();
+            const replacement = Array.from(document.querySelectorAll('#discoveredAppsList .discovered-app-item'))
+                .find(item => item.dataset.discoveryKey === key);
+            replacement?.querySelector('input[type="checkbox"]')?.focus();
             updateSelectAllCheckbox();
         }
 
@@ -1093,21 +1173,14 @@
 
             const isChecked = selectAllCb.checked;
             filtered.forEach(app => {
+                const key = discoveredAppKey(app);
                 if (isChecked) {
-                    adminState.selectedDiscoveredApps.add(app.url);
+                    adminState.selectedDiscoveredApps.add(key);
                 } else {
-                    adminState.selectedDiscoveredApps.delete(app.url);
-                }
-                // Update DOM directly instead of re-rendering
-                const item = document.querySelector(`.discovered-app-item[data-url="${CSS.escape(app.url)}"]`);
-                if (item) {
-                    item.classList.toggle('selected', isChecked);
-                    const checkbox = item.querySelector('input[type="checkbox"]');
-                    if (checkbox) checkbox.checked = isChecked;
+                    adminState.selectedDiscoveredApps.delete(key);
                 }
             });
-
-            updateBulkActionBar();
+            renderDiscoveredAppsList();
         }
 
         function updateSelectAllCheckbox() {
@@ -1117,8 +1190,8 @@
             const filtered = adminState.filteredDiscoveredApps || [];
             const selected = adminState.selectedDiscoveredApps || new Set();
 
-            const allSelected = filtered.length > 0 && filtered.every(app => selected.has(app.url));
-            const someSelected = filtered.some(app => selected.has(app.url));
+            const allSelected = filtered.length > 0 && filtered.every(app => selected.has(discoveredAppKey(app)));
+            const someSelected = filtered.some(app => selected.has(discoveredAppKey(app)));
 
             selectAllCb.checked = allSelected;
             selectAllCb.indeterminate = someSelected && !allSelected;
@@ -1138,23 +1211,14 @@
 
         window.clearDiscoveredSelection = function() {
             if (adminState.selectedDiscoveredApps) {
-                // Update DOM directly for each selected item
-                adminState.selectedDiscoveredApps.forEach(url => {
-                    const item = document.querySelector(`.discovered-app-item[data-url="${CSS.escape(url)}"]`);
-                    if (item) {
-                        item.classList.remove('selected');
-                        const checkbox = item.querySelector('input[type="checkbox"]');
-                        if (checkbox) checkbox.checked = false;
-                    }
-                });
                 adminState.selectedDiscoveredApps.clear();
             }
+            renderDiscoveredAppsList();
             updateSelectAllCheckbox();
-            updateBulkActionBar();
         }
 
         function getSelectedUrls() {
-            return Array.from(adminState.selectedDiscoveredApps || []);
+            return [...new Set(Array.from(adminState.selectedDiscoveredApps || [], key => JSON.parse(key)[1]))];
         }
 
         window.openBulkConfigureModal = function() {

@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 
 	"dashgate/internal/auth"
 	"dashgate/internal/database"
@@ -135,10 +137,16 @@ func AdminDiscoveredAppsHandler(app *server.App) http.HandlerFunc {
 					stale = append(stale, *override)
 				}
 			}
+			ignored, err := database.ListIgnoredDiscoveredApps(app)
+			if err != nil {
+				respondError(w, http.StatusInternalServerError, "Failed to load ignored apps")
+				return
+			}
 
 			response := map[string]interface{}{
-				"active": rawApps,
-				"stale":  stale,
+				"active":  rawApps,
+				"stale":   stale,
+				"ignored": ignored,
 			}
 			respondJSON(w, http.StatusOK, response)
 
@@ -176,5 +184,67 @@ func AdminDiscoveredAppsHandler(app *server.App) http.HandlerFunc {
 		default:
 			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
+	}
+}
+
+// IgnoredDiscoveredAppsHandler dismisses discovered inbox entries or restores saved dismissals.
+func IgnoredDiscoveredAppsHandler(app *server.App) http.HandlerFunc {
+	type actionRequest struct {
+		Action string                        `json:"action"`
+		Items  []models.IgnoredDiscoveredApp `json:"items"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			respondError(w, http.StatusMethodNotAllowed, "Method not allowed")
+			return
+		}
+		var req actionRequest
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
+			respondError(w, http.StatusBadRequest, "Invalid request")
+			return
+		}
+		var extra interface{}
+		if err := dec.Decode(&extra); err != io.EOF {
+			respondError(w, http.StatusBadRequest, "Invalid request")
+			return
+		}
+		if (req.Action != "dismiss" && req.Action != "restore") || len(req.Items) == 0 || len(req.Items) > 100 {
+			respondError(w, http.StatusBadRequest, "Invalid action or item count (max 100)")
+			return
+		}
+		for _, item := range req.Items {
+			if strings.TrimSpace(item.Source) == "" || strings.TrimSpace(item.URL) == "" || len(item.Source) > 64 || len(item.URL) > 4096 {
+				respondError(w, http.StatusBadRequest, "Source and URL are required")
+				return
+			}
+		}
+		var err error
+		if req.Action == "dismiss" {
+			// Resolve every pair against the current raw scan. Never trust a client name or
+			// allow a configured visible app to be removed from the inbox.
+			current := make(map[string]models.DiscoveredAppWithOverride)
+			for _, found := range discovery.GetAllRawDiscoveredApps(app) {
+				current[found.Source+"\x00"+found.URL] = found
+			}
+			validated := make([]models.IgnoredDiscoveredApp, 0, len(req.Items))
+			for _, item := range req.Items {
+				found, ok := current[item.Source+"\x00"+item.URL]
+				if !ok || (found.Override != nil && !found.Override.Hidden) {
+					respondError(w, http.StatusBadRequest, "Item is not an actionable discovered app")
+					return
+				}
+				validated = append(validated, models.IgnoredDiscoveredApp{Source: found.Source, URL: found.URL, Name: found.Name})
+			}
+			err = database.DismissDiscoveredApps(app, validated)
+		} else {
+			err = database.RestoreIgnoredDiscoveredApps(app, req.Items)
+		}
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to update ignored apps")
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "updated": len(req.Items)})
 	}
 }

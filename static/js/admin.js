@@ -20,6 +20,7 @@ let adminState = {
   deleteCallback: null,
   discoveredApps: [],
   staleOverrides: [],
+  ignoredDiscoveredApps: [],
   discoveredSourceFilter: "all",
   selectedDiscoveredApps: new Set(),
   filteredDiscoveredApps: [],

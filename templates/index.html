@@ -3986,6 +3986,7 @@ environment:
                       >0</span
                     >
                   </h3>
+                  <button class="bulk-action-btn secondary" onclick="refreshDiscoveredAppsData()" aria-label="Refresh discovered list">Refresh</button>
                 </div>
                 <p class="settings-desc" style="margin-bottom: 12px">
                   Unconfigured apps found by discovery engines. Configure them
@@ -4056,6 +4057,9 @@ environment:
                   >
                     Configure
                   </button>
+                  <button class="bulk-action-btn secondary" onclick="dismissSelectedDiscoveredApps()">
+                    Dismiss selected
+                  </button>
                   <button
                     class="bulk-action-btn secondary"
                     onclick="clearDiscoveredSelection()"
@@ -4066,6 +4070,7 @@ environment:
                 <div class="discovered-apps-list" id="discoveredAppsList">
                   <div class="admin-loading">Loading discovered apps...</div>
                 </div>
+                <div id="discoveredIgnoredSection"></div>
                 <div id="discoveredStaleSection" style="display: none"></div>
               </div>
             </div>

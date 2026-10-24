@@ -269,6 +269,8 @@ Discovered apps are hidden by default. Use the admin panel to:
 - Assign groups and categories
 - Test discovery connections
 
+The **Discovered Apps** inbox lists unconfigured and Hidden routes. Use **Dismiss** on a row or select several rows and choose **Dismiss selected** to clear routes you do not want to configure. Dismissed routes move to the collapsed **Ignored** list, where **Restore** returns them to the inbox. Ignored entries remain available for restoration even if a source stops reporting them. Dismissing a route does not publish, hide, or change dashboard access for an app; it only removes that source and URL pair from the inbox.
+
 A published discovered app with no assigned groups is visible to every authenticated user. An unpublished or hidden discovered app does not appear, including for admins.
 
 ### Explaining App Access
