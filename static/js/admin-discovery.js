@@ -771,12 +771,18 @@
                 section.innerHTML = '';
                 return;
             }
+            const searchTerm = (document.getElementById('discoveredSearchInput')?.value || '').toLowerCase();
+            const sourceFilter = adminState.discoveredSourceFilter || 'all';
+            const visible = ignored.filter(app =>
+                (sourceFilter === 'all' || app.source === sourceFilter) &&
+                (!searchTerm || (app.name || '').toLowerCase().includes(searchTerm) || app.url.toLowerCase().includes(searchTerm))
+            );
             const activeKeys = new Set((adminState.discoveredApps || []).map(a => discoveredAppKey(a)));
             const wasOpen = section.querySelector('details')?.open || false;
             section.innerHTML = `<details ${wasOpen ? 'open' : ''}>
-                <summary>Ignored (${ignored.length} ignored)</summary>
+                <summary>Ignored (${visible.length === ignored.length ? `${ignored.length} ignored` : `${visible.length} of ${ignored.length} match`})</summary>
                 <p class="settings-desc">Dismissed routes stay here until restored.</p>
-                ${ignored.map(app => `<div class="discovered-app-item">
+                ${visible.length === 0 ? '<div class="admin-empty">No ignored apps match the current search or source filter.</div>' : visible.map(app => `<div class="discovered-app-item">
                     <div class="discovered-app-info">
                         <div class="discovered-app-name">${escapeHtml(app.name || app.url)}</div>
                         <div class="discovered-app-url">${escapeHtml(app.url)}</div>
