@@ -122,6 +122,14 @@ test.describe("Admin Panel", () => {
       { name: 'Old service', url: 'https://old.test/archive', source: 'docker' },
     ];
     await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: { active, stale: [], ignored } }));
+    await page.route('**/api/admin/discovered-apps/ignored', async route => {
+      const { action, items } = route.request().postDataJSON();
+      expect(action).toBe('restore');
+      const index = ignored.findIndex(app => app.source === items[0].source && app.url === items[0].url);
+      expect(index).toBeGreaterThanOrEqual(0);
+      ignored.splice(index, 1);
+      await route.fulfill({ json: { status: 'ok' } });
+    });
     await page.reload();
     await page.locator('.dock-item').nth(4).click();
     await page.locator('[data-tab="admin"]').click();
@@ -139,8 +147,12 @@ test.describe("Admin Panel", () => {
     await expect(page.locator('#discoveredIgnoredSection')).toContainText('No ignored apps match');
     await page.locator('#discoveredSearchInput').fill('hook.test');
     await expect(page.locator('#discoveredIgnoredSection .discovered-app-item')).toHaveCount(1);
-    await expect(page.locator('#discoveredCountBadge')).toBeHidden();
+    await expect(page.locator('#discoveredCountBadge')).toHaveText('1');
     await expect(page.locator('#discoveredIgnoredSection summary')).toContainText('1 of 2');
+    await page.locator('#discoveredIgnoredSection').getByRole('button', { name: 'Restore' }).click();
+    await expect(page.locator('#discoveredAppsList')).toContainText('Webhook');
+    await expect(page.locator('#discoveredIgnoredSection .discovered-app-item')).toHaveCount(0);
+    await expect(page.locator('#discoveredCountBadge')).toHaveText('2');
   });
 
   test("discovery inbox keeps a row visible when dismiss fails", async ({ page }) => {
