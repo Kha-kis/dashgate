@@ -210,6 +210,7 @@ test.describe("Admin Panel", () => {
   test("discovery ignore rule save and refresh failures preserve inbox rows", async ({ page }) => {
     const active = [{ name: 'Webhook', url: 'https://routes.test/hooks', source: 'nginx', icon: '', description: '', override: null }];
     let listFails = false;
+    let saveFails = true;
     await page.route('**/api/admin/discovered-apps', route => listFails
       ? route.fulfill({ status: 500, json: { error: 'List unavailable' } })
       : route.fulfill({ json: { active, stale: [], ignored: [], ignoreRules: [], ruleMatches: [] } }));
@@ -217,7 +218,9 @@ test.describe("Admin Panel", () => {
       if (new URL(route.request().url()).pathname.endsWith('/preview')) {
         return route.fulfill({ json: { count: 1, matches: active } });
       }
-      return route.fulfill({ status: 500, json: { error: 'Save unavailable' } });
+      return saveFails
+        ? route.fulfill({ status: 500, json: { error: 'Save unavailable' } })
+        : route.fulfill({ status: 201, json: { rule: { id: 1, ...route.request().postDataJSON() } } });
     });
     await page.reload();
     await page.locator('.dock-item').nth(4).click();
@@ -232,6 +235,11 @@ test.describe("Admin Panel", () => {
     await page.getByRole('button', { name: 'Refresh discovered list' }).click();
     await expect(page.locator('#discoveredAppsList')).toContainText('Webhook');
     await expect(page.locator('#toast')).toContainText('Failed to refresh');
+    saveFails = false;
+    await page.locator('#ignoreRuleSaveButton').click();
+    await expect(page.locator('#toast')).toContainText('Saved, but refresh failed');
+    await expect(page.locator('#ignoreRuleEditor')).toBeHidden();
+    await expect(page.locator('#discoveredAppsList')).toContainText('Webhook');
   });
 
   test("discovery ignore rule may cover future routes after an empty preview", async ({ page }) => {

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- **Discovery ignore rules** — admins can preview and save source, origin, and path-prefix rules for repeated discovered routes. Rule-matched routes remain inspectable, rules can be edited or disabled, and manual Ignored entries stay separate. Rules affect only inbox triage, including later discovery scans; published apps and dashboard access are unchanged.
+
 ### Repository
 
 - Moved host-specific deployment and backup automation to separate private operations tooling. DashGate application behavior is unchanged.

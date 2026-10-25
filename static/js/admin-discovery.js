@@ -907,7 +907,7 @@
                     await loadDiscoveredAppsData(true);
                 } catch (_) {
                     showToast('Saved, but refresh failed. Use Refresh discovered list to retry.');
-                    return false;
+                    return true;
                 }
                 showToast(successMessage);
                 return true;
