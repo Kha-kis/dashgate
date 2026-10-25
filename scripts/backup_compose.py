@@ -2,6 +2,7 @@
 """Create and retain verified backups for an existing DashGate Compose install."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -70,6 +71,12 @@ def run_backup(
         expected_image="", target_image="", target_version=version,
     )
     deploy_compose.validate_compose_mount(config, run)
+    mounts = json.loads(run(["docker", "inspect", "dashgate", "--format", "{{json .Mounts}}"]))
+    live_mounts = [mount for mount in mounts if mount.get("Destination") == "/config"]
+    if (len(live_mounts) != 1 or live_mounts[0].get("Type") != "bind"
+            or not live_mounts[0].get("RW")
+            or Path(live_mounts[0].get("Source", "")).resolve() != data_dir.resolve()):
+        raise ValueError("running DashGate /config mount does not match the data directory")
     backup = deploy_compose.create_backup(config, stamp=stamp)
     verify(backup)
     marker = backup / MARKER

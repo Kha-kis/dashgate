@@ -31,12 +31,15 @@ class ScheduledBackupTests(unittest.TestCase):
             db.commit()
         self.backups = self.root / "backups"
 
-    def compose_run(self, args, source=None):
+    def compose_run(self, args, source=None, running_source=None):
         if args[-3:] == ["config", "--format", "json"]:
             return json.dumps({"services": {"dashgate": {"volumes": [{
                 "type": "bind", "source": str(source or self.data.resolve()),
                 "target": "/config", "read_only": False,
             }]}}})
+        if args[:2] == ["docker", "inspect"]:
+            return json.dumps([{"Type": "bind", "Source": str(running_source or self.data.resolve()),
+                                "Destination": "/config", "RW": True}])
         return ""
 
     def test_backup_verifies_snapshot_and_keeps_newest_two(self):
@@ -125,6 +128,16 @@ class ScheduledBackupTests(unittest.TestCase):
             backup_compose.run_backup(
                 self.compose, self.data, self.backups, "1.5.6",
                 run=lambda args: self.compose_run(args, source=other),
+            )
+        self.assertFalse(self.backups.exists())
+
+    def test_rejects_data_path_not_mounted_by_running_container(self):
+        other = self.root / "other"
+        other.mkdir()
+        with self.assertRaisesRegex(ValueError, "running.*mount"):
+            backup_compose.run_backup(
+                self.compose, self.data, self.backups, "1.5.6",
+                run=lambda args: self.compose_run(args, running_source=other),
             )
         self.assertFalse(self.backups.exists())
 
