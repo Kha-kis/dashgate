@@ -2,7 +2,7 @@
 Description=Daily verified DashGate backup
 
 [Timer]
-OnCalendar=*-*-* 02:30:00
+OnCalendar=*-*-* 03:30:00 America/Chicago
 Persistent=true
 Unit=dashgate-backup.service
 
