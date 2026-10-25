@@ -171,6 +171,20 @@ def replace_compose_image(config: Config) -> None:
     _atomic_write(config.compose, content[:start] + config.target_image.encode() + content[end:])
 
 
+def validate_compose_mount(config: Config, run: Callable[[list[str]], str]) -> dict:
+    """Require DashGate's writable /config bind mount to match the data path."""
+    compose_command = ["docker", "compose", "-f", str(config.compose)]
+    run(compose_command + ["config", "-q"])
+    rendered = json.loads(run(compose_command + ["config", "--format", "json"]))
+    service = rendered.get("services", {}).get("dashgate", {})
+    config_mounts = [volume for volume in service.get("volumes", []) if volume.get("target") == "/config"]
+    if (len(config_mounts) != 1 or config_mounts[0].get("type") != "bind"
+            or config_mounts[0].get("read_only", False)
+            or Path(config_mounts[0].get("source", "")).resolve() != config.data_dir.resolve()):
+        raise ValueError("DashGate /config bind mount does not match the writable data directory")
+    return service
+
+
 def deploy(
     config: Config,
     run: Callable[[list[str]], str] = run_command,
@@ -180,16 +194,9 @@ def deploy(
 ) -> DeploymentResult:
     validate(config)
     compose_command = ["docker", "compose", "-f", str(config.compose)]
-    run(compose_command + ["config", "-q"])
-    rendered = json.loads(run(compose_command + ["config", "--format", "json"]))
-    service = rendered.get("services", {}).get("dashgate", {})
+    service = validate_compose_mount(config, run)
     if service.get("image") != config.expected_image:
         raise ValueError("current image for DashGate service does not match expected pin")
-    config_mounts = [volume for volume in service.get("volumes", []) if volume.get("target") == "/config"]
-    if (len(config_mounts) != 1 or config_mounts[0].get("type") != "bind"
-            or config_mounts[0].get("read_only", False)
-            or Path(config_mounts[0].get("source", "")).resolve() != config.data_dir.resolve()):
-        raise ValueError("DashGate /config bind mount does not match the writable data directory")
     backup_dir = create_backup(config)
     try:
         run(["docker", "pull", config.target_image])

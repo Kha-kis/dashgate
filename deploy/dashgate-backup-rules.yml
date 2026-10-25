@@ -3,7 +3,7 @@ groups:
     interval: 1m
     rules:
       - alert: DashGateBackupFailed
-        expr: dashgate_backup_last_attempt_success{job="node"} == 0
+        expr: dashgate_backup_last_attempt_success{job="node"} == 0 or dashgate_backup_service_failure{job="node"} == 1
         for: 5m
         labels:
           severity: critical

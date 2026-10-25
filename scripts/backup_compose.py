@@ -62,12 +62,14 @@ def run_backup(
     keep: int = 14,
     stamp: str | None = None,
     verify: Callable[[Path], None] = deploy_compose.verify_backup,
+    run: Callable[[list[str]], str] = deploy_compose.run_command,
 ) -> Path:
     _validate(compose, data_dir, backup_root, version, keep)
     config = deploy_compose.Config(
         compose=compose, data_dir=data_dir, backup_root=backup_root,
         expected_image="", target_image="", target_version=version,
     )
+    deploy_compose.validate_compose_mount(config, run)
     backup = deploy_compose.create_backup(config, stamp=stamp)
     verify(backup)
     marker = backup / MARKER
@@ -99,6 +101,8 @@ def write_metrics(path: Path, success: bool, now: int | None = None) -> None:
             os.fsync(output.fileno())
         os.chmod(temp_name, 0o644)
         os.replace(temp_name, path)
+        if success:
+            path.with_name("dashgate-backup-failure.prom").unlink(missing_ok=True)
     finally:
         if os.path.exists(temp_name):
             os.unlink(temp_name)
