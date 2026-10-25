@@ -4,9 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.5.7] - 2026-10-25
+
 ### Added
 
 - **Discovery ignore rules** — admins can preview and save source, origin, and path-prefix rules for repeated discovered routes. Rule-matched routes remain inspectable, rules can be edited or disabled, and manual Ignored entries stay separate. Rules affect only inbox triage, including later discovery scans; published apps and dashboard access are unchanged.
+
+### Upgrade
+
+- DashGate creates the new `discovery_ignore_rules` table on startup. Keep the normal pre-upgrade backup of the persistent `/config` directory; existing discovery settings and manual Ignored entries are preserved.
 
 ### Repository
 
