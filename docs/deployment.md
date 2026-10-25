@@ -8,7 +8,7 @@ This guide covers the DashGate application in an existing Docker Compose install
 2. Identify the persistent directory mounted at `/config`. Make a recoverable copy of that directory, your Compose file, and any adjacent `.env` file. To copy the SQLite database and its WAL files together, stop only the DashGate container while copying, then start it again. An operator with SQLite tooling can instead use SQLite's online backup API for the database while the service runs.
 3. Keep the backup private and verify that its database opens with `PRAGMA quick_check` before changing the image.
 
-Pin the target image to a published digest, validate Compose, and recreate only DashGate:
+Edit the `dashgate` service's `image:` value in your Compose file to the target release's published digest (for example, `ghcr.io/kha-kis/dashgate@sha256:<full-digest>`). Save the previous value for recovery. Then validate Compose and recreate only DashGate:
 
 ```bash
 docker compose config -q
