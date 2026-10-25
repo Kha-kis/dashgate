@@ -659,6 +659,10 @@
 
             // Inbox: only unconfigured apps OR hidden apps
             let apps = allDiscovered.filter(a => (!a.override || a.override.hidden) && !ignoredKeys.has(discoveredAppKey(a)) && !ruleKeys.has(discoveredAppKey(a)));
+            const actionableKeys = new Set(apps.map(discoveredAppKey));
+            for (const key of adminState.selectedDiscoveredApps) {
+                if (!actionableKeys.has(key)) adminState.selectedDiscoveredApps.delete(key);
+            }
 
             if (allDiscovered.length === 0) {
                 container.innerHTML = '<div class="admin-empty">No discovered apps. Enable a discovery source in the Discovery settings.</div>';
@@ -862,12 +866,12 @@
             const visible = matches.map(match => ({ match, app: activeByKey.get(discoveredAppKey(match)) }))
                 .filter(({ match, app }) => app && !ignoredKeys.has(discoveredAppKey(match)) &&
                     (sourceFilter === 'all' || match.source === sourceFilter) &&
-                    (!searchTerm || (app.name || '').toLowerCase().includes(searchTerm) || app.url.toLowerCase().includes(searchTerm)));
+                    (!searchTerm || (app.name || '').toLowerCase().includes(searchTerm) || (app.override?.nameOverride || '').toLowerCase().includes(searchTerm) || app.url.toLowerCase().includes(searchTerm)));
             const wasOpen = section.querySelector('details')?.open || false;
             section.innerHTML = `<details ${wasOpen ? 'open' : ''}><summary>Rule matched (${visible.length === matches.length ? `${matches.length} rule matched` : `${visible.length} of ${matches.length} match`})</summary>
                 <p class="settings-desc">These routes remain discovered. Edit or disable a rule to return them to the inbox.</p>
                 ${visible.length ? visible.map(({ match, app }) => `<div class="discovered-app-item"><div class="discovered-app-info">
-                    <div class="discovered-app-name">${escapeHtml(app.name || app.url)}</div><div class="discovered-app-url">${escapeHtml(app.url)}</div>
+                    <div class="discovered-app-name">${escapeHtml(app.override?.nameOverride || app.name || app.url)}</div><div class="discovered-app-url">${escapeHtml(app.url)}</div>
                     <div class="discovered-app-badges"><span class="discovered-source-badge">${escapeHtml(app.source)}</span></div></div>
                     <div class="admin-item-actions"><button type="button" class="admin-action-btn discovery-text-action" data-edit-matched-rule="${Number(match.ruleId)}">Edit rule</button></div></div>`).join('') : '<div class="admin-empty">No rule-matched apps match the current search or source filter.</div>'}</details>`;
         }
@@ -886,8 +890,8 @@
                 const data = await resp.json();
                 if (JSON.stringify(input) !== JSON.stringify(ignoreRuleFormValue())) return;
                 const results = document.getElementById('ignoreRulePreviewResults');
-                results.innerHTML = `<p>${Number(data.count)} current inbox routes. Future routes may also match.</p>
-                    ${(data.matches || []).map(app => `<div class="ignore-rule-preview-row"><strong>${escapeHtml(app.name || app.url)}</strong> <span>${escapeHtml(app.source)}</span><div>${escapeHtml(app.url)}</div></div>`).join('')}
+                results.innerHTML = `<p>${Number(data.count)} current inbox routes${input.enabled ? '' : ' would match if enabled'}. Future routes may also match.</p>
+                    ${(data.matches || []).map(app => `<div class="ignore-rule-preview-row"><strong>${escapeHtml(app.override?.nameOverride || app.name || app.url)}</strong> <span>${escapeHtml(app.source)}</span><div>${escapeHtml(app.url)}</div></div>`).join('')}
                     ${data.count > (data.matches || []).length ? `<p>Showing first ${(data.matches || []).length} matches.</p>` : ''}`;
                 ignoreRulePreviewSignature = JSON.stringify(input);
                 document.getElementById('ignoreRuleSaveButton').disabled = false;

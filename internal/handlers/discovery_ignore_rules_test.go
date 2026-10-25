@@ -131,6 +131,10 @@ func TestDiscoveryIgnoreRuleOverlapsAndEmptyPreview(t *testing.T) {
 	if len(matches) != 1 || matches[0].RuleID != first {
 		t.Fatalf("overlap matches: %+v", matches)
 	}
+	coveredPreview := ruleRequest(app, http.MethodPost, "/api/admin/discovery-ignore-rules/preview", ruleBody("nginx", "https://example.test", "/health/live", true))
+	if coveredPreview.Code != http.StatusOK || !strings.Contains(coveredPreview.Body.String(), `"count":0`) {
+		t.Fatalf("already-covered route counted as inbox: %d: %s", coveredPreview.Code, coveredPreview.Body.String())
+	}
 	empty := ruleBody("docker", "https://future.test", "/hooks", true)
 	preview := ruleRequest(app, http.MethodPost, "/api/admin/discovery-ignore-rules/preview", empty)
 	if preview.Code != http.StatusOK || !strings.Contains(preview.Body.String(), "\"count\":0") {

@@ -141,12 +141,22 @@ func DiscoveryIgnoreRulePreviewHandler(app *server.App) http.HandlerFunc {
 		for _, item := range ignored {
 			ignoredKeys[item.Source+"\x00"+item.URL] = true
 		}
+		rules, err := database.ListDiscoveryIgnoreRules(app)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to preview ignore rule")
+			return
+		}
+		rawApps := discovery.GetAllRawDiscoveredApps(app)
+		coveredKeys := make(map[string]bool)
+		for _, match := range discovery.MatchIgnoreRules(rules, rawApps) {
+			coveredKeys[match.Source+"\x00"+match.URL] = true
+		}
 		matches := make([]models.DiscoveredAppWithOverride, 0)
 		count := 0
 		seen := make(map[string]bool)
-		for _, found := range discovery.GetAllRawDiscoveredApps(app) {
+		for _, found := range rawApps {
 			key := found.Source + "\x00" + found.URL
-			if seen[key] || ignoredKeys[key] || !discovery.MatchesIgnoreRule(rule, found) {
+			if seen[key] || ignoredKeys[key] || coveredKeys[key] || !discovery.MatchesIgnoreRule(rule, found) {
 				continue
 			}
 			seen[key] = true

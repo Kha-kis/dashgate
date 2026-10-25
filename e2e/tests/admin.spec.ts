@@ -164,8 +164,11 @@ test.describe("Admin Panel", () => {
     await expect(page.locator('#ignoreRuleSaveButton')).toBeDisabled();
     await page.locator('#ignoreRulePathPrefix').fill('/health');
     await page.getByRole('button', { name: 'Preview rule' }).click();
+    await page.locator('#discoveredAppsList .discovered-app-item').filter({ hasText: 'Health live' }).locator('input[type="checkbox"]').check();
+    await expect(page.locator('#discoveredBulkActions')).toBeVisible();
     await page.locator('#ignoreRuleSaveButton').click();
     await expect(page.locator('#discoveredCountBadge')).toBeHidden();
+    await expect(page.locator('#discoveredBulkActions')).toBeHidden();
     await expect(page.locator('#discoveryRuleMatchedSection')).toContainText('2 rule matched');
     await expect(page.locator('#discoveryRuleMatchedSection')).not.toContainText('Published');
     await page.locator('#discoveryRuleMatchedSection summary').click();
@@ -176,6 +179,7 @@ test.describe("Admin Panel", () => {
     await expect(page.locator('#discoveredCountBadge')).toHaveText('2');
     await page.locator('#discoveryIgnoreRulesSection').getByRole('button', { name: 'Edit rule' }).click();
     await page.getByRole('button', { name: 'Preview rule' }).click();
+    await expect(page.locator('#ignoreRulePreviewResults')).toContainText('would match if enabled');
     await page.locator('#ignoreRuleSaveButton').click();
     await expect(page.locator('#discoveredCountBadge')).toHaveText('2');
     await page.locator('#discoveryIgnoreRulesSection').getByRole('button', { name: 'Enable rule' }).click();
@@ -185,7 +189,7 @@ test.describe("Admin Panel", () => {
   });
 
   test("discovery ignore rule explains manual restore precedence", async ({ page }) => {
-    const app = { name: 'Health', url: 'https://routes.test/health', source: 'nginx', icon: '', description: '', override: null };
+    const app = { name: 'Health', url: 'https://routes.test/health', source: 'nginx', icon: '', description: '', override: { hidden: true, nameOverride: 'Internal API' } };
     const rule = { id: 3, source: 'nginx', origin: 'https://routes.test', pathPrefix: '/health', enabled: true };
     let ignored = true;
     await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: {
@@ -205,6 +209,10 @@ test.describe("Admin Panel", () => {
     await page.locator('#discoveredIgnoredSection').getByRole('button', { name: 'Restore' }).click();
     await expect(page.locator('#discoveredCountBadge')).toBeHidden();
     await expect(page.locator('#discoveryRuleMatchedSection')).toContainText('1 rule matched');
+    await page.locator('#discoveryRuleMatchedSection summary').click();
+    await page.locator('#discoveredSearchInput').fill('Internal API');
+    await expect(page.locator('#discoveryRuleMatchedSection .discovered-app-item')).toHaveCount(1);
+    await expect(page.locator('#discoveryRuleMatchedSection')).toContainText('Internal API');
   });
 
   test("discovery ignore rule save and refresh failures preserve inbox rows", async ({ page }) => {
