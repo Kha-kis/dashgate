@@ -1,0 +1,8 @@
+[Unit]
+Description=Record DashGate backup failure for %i
+
+[Service]
+Type=oneshot
+User=khak1s
+ExecStart=-/bin/sh -c 'echo dashgate_backup_service_failure 1 > /opt/prometheus/node-exporter-textfile/.dashgate-backup-failure.prom.tmp && mv /opt/prometheus/node-exporter-textfile/.dashgate-backup-failure.prom.tmp /opt/prometheus/node-exporter-textfile/dashgate-backup-failure.prom'
+ExecStart=/usr/bin/logger -p daemon.err -t dashgate-backup "Backup failed: %i; inspect journalctl -u dashgate-backup.service"
