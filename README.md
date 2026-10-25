@@ -50,7 +50,7 @@ docker run -d \
 
 Visit `http://localhost:1738` and complete the setup wizard.
 
-For upgrades to an existing Docker Compose installation, see the [deployment runbook](docs/deployment.md) for a verified backup, digest-pinned rollout, daily backup setup, health checks, and recovery steps.
+For Docker Compose upgrades, see the [upgrade guide](docs/deployment.md) for backup, health-check, and recovery guidance. Host schedules and monitoring belong to each operator's infrastructure.
 
 ### Manual Installation
 
