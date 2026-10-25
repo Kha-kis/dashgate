@@ -101,7 +101,8 @@ func TestIgnoredDiscovered_StaleRestoreAndPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.Exec(`CREATE TABLE ignored_discovered_apps (source TEXT NOT NULL, url TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(source,url));`)
+	_, err = db.Exec(`CREATE TABLE ignored_discovered_apps (source TEXT NOT NULL, url TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(source,url));
+	CREATE TABLE discovery_ignore_rules (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, origin TEXT NOT NULL, path_prefix TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(source,origin,path_prefix));`)
 	if err != nil {
 		t.Fatal(err)
 	}

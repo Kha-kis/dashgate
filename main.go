@@ -271,6 +271,9 @@ func main() {
 	mux.HandleFunc("/api/admin/discovered-apps", auth.RequireAdmin(app, handlers.AdminDiscoveredAppsHandler(app)))
 	mux.HandleFunc("/api/admin/discovered-apps/ignored", auth.RequireAdmin(app, handlers.IgnoredDiscoveredAppsHandler(app)))
 	mux.HandleFunc("/api/admin/discovered-apps/bulk", auth.RequireAdmin(app, handlers.BulkDiscoveredAppsHandler(app)))
+	mux.HandleFunc("/api/admin/discovery-ignore-rules", auth.RequireAdmin(app, handlers.DiscoveryIgnoreRulesHandler(app)))
+	mux.HandleFunc("/api/admin/discovery-ignore-rules/preview", auth.RequireAdmin(app, handlers.DiscoveryIgnoreRulePreviewHandler(app)))
+	mux.HandleFunc("/api/admin/discovery-ignore-rules/", auth.RequireAdmin(app, handlers.DiscoveryIgnoreRuleByIDHandler(app)))
 
 	// Discovery management
 	mux.HandleFunc("/api/admin/docker-discovery", auth.RequireAdmin(app, handlers.DockerDiscoveryHandler(app)))

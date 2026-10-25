@@ -142,11 +142,19 @@ func AdminDiscoveredAppsHandler(app *server.App) http.HandlerFunc {
 				respondError(w, http.StatusInternalServerError, "Failed to load ignored apps")
 				return
 			}
+			rules, err := database.ListDiscoveryIgnoreRules(app)
+			if err != nil {
+				respondError(w, http.StatusInternalServerError, "Failed to load ignore rules")
+				return
+			}
+			ruleMatches := discovery.MatchIgnoreRules(rules, rawApps)
 
 			response := map[string]interface{}{
-				"active":  rawApps,
-				"stale":   stale,
-				"ignored": ignored,
+				"active":      rawApps,
+				"stale":       stale,
+				"ignored":     ignored,
+				"ignoreRules": rules,
+				"ruleMatches": ruleMatches,
 			}
 			respondJSON(w, http.StatusOK, response)
 
