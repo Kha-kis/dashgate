@@ -627,6 +627,8 @@
                 adminState.discoveredApps = data.active || [];
                 adminState.staleOverrides = data.stale || [];
                 adminState.ignoredDiscoveredApps = data.ignored || [];
+                adminState.discoveryIgnoreRules = data.ignoreRules || [];
+                adminState.discoveryRuleMatches = data.ruleMatches || [];
                 renderDiscoveredAppsList();
                 renderAppsList();
             } catch (e) {
@@ -653,15 +655,18 @@
             const allDiscovered = adminState.discoveredApps || [];
             const ignored = adminState.ignoredDiscoveredApps || [];
             const ignoredKeys = new Set(ignored.map(a => discoveredAppKey(a)));
+            const ruleKeys = new Set((adminState.discoveryRuleMatches || []).map(a => discoveredAppKey(a)));
 
             // Inbox: only unconfigured apps OR hidden apps
-            let apps = allDiscovered.filter(a => (!a.override || a.override.hidden) && !ignoredKeys.has(discoveredAppKey(a)));
+            let apps = allDiscovered.filter(a => (!a.override || a.override.hidden) && !ignoredKeys.has(discoveredAppKey(a)) && !ruleKeys.has(discoveredAppKey(a)));
 
             if (allDiscovered.length === 0) {
                 container.innerHTML = '<div class="admin-empty">No discovered apps. Enable a discovery source in the Discovery settings.</div>';
                 badge.style.display = 'none';
                 adminState.filteredDiscoveredApps = [];
                 renderIgnoredDiscoveredApps();
+                renderDiscoveryIgnoreRules();
+                renderRuleMatchedDiscoveredApps();
                 renderStaleOverrides();
                 updateBulkActionBar();
                 return;
@@ -693,6 +698,8 @@
                 container.innerHTML = '<div class="admin-empty">No actionable discovered apps.</div>';
                 adminState.filteredDiscoveredApps = [];
                 renderIgnoredDiscoveredApps();
+                renderDiscoveryIgnoreRules();
+                renderRuleMatchedDiscoveredApps();
                 renderStaleOverrides();
                 updateBulkActionBar();
                 return;
@@ -741,6 +748,7 @@
                         </div>
                         <div class="admin-item-actions">
                             <button class="admin-action-btn discovery-text-action" onclick="dismissDiscoveredApp('${encodeURIComponent(app.source).replace(/'/g, '%27')}', '${encodeURIComponent(app.url).replace(/'/g, '%27')}')" title="Dismiss" aria-label="Dismiss">Dismiss</button>
+                            <button type="button" class="admin-action-btn discovery-text-action ignore-rule-from-route" aria-label="Ignore similar routes">Rule</button>
                             <button class="admin-action-btn" onclick="openDiscoveredAppModal('${encodeURIComponent(app.url)}')" title="Configure">
                                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -756,6 +764,8 @@
             updateBulkActionBar();
 
             renderIgnoredDiscoveredApps();
+            renderDiscoveryIgnoreRules();
+            renderRuleMatchedDiscoveredApps();
             renderStaleOverrides();
         }
 
@@ -778,6 +788,7 @@
                 (!searchTerm || (app.name || '').toLowerCase().includes(searchTerm) || app.url.toLowerCase().includes(searchTerm))
             );
             const activeKeys = new Set((adminState.discoveredApps || []).map(a => discoveredAppKey(a)));
+            const ruleKeys = new Set((adminState.discoveryRuleMatches || []).map(a => discoveredAppKey(a)));
             const wasOpen = section.querySelector('details')?.open || false;
             section.innerHTML = `<details ${wasOpen ? 'open' : ''}>
                 <summary>Ignored (${visible.length === ignored.length ? `${ignored.length} ignored` : `${visible.length} of ${ignored.length} match`})</summary>
@@ -788,11 +799,171 @@
                         <div class="discovered-app-url">${escapeHtml(app.url)}</div>
                         <div class="discovered-app-badges"><span class="discovered-source-badge">${escapeHtml(app.source)}</span>
                             ${activeKeys.has(discoveredAppKey(app)) ? '' : '<span class="discovered-status-badge">No longer discovered</span>'}</div>
+                        ${ruleKeys.has(discoveredAppKey(app)) ? '<p class="settings-desc">An active ignore rule will still keep this route out of the inbox after Restore.</p>' : ''}
                     </div>
                     <div class="admin-item-actions"><button class="admin-action-btn discovery-text-action" onclick="restoreDiscoveredApp('${encodeURIComponent(app.source).replace(/'/g, '%27')}', '${encodeURIComponent(app.url).replace(/'/g, '%27')}')">Restore</button></div>
                 </div>`).join('')}
             </details>`;
         }
+
+        let ignoreRuleEditingID = null;
+        let ignoreRulePreviewSignature = null;
+
+        function ignoreRuleFormValue() {
+            return {
+                source: document.getElementById('ignoreRuleSource').value,
+                origin: document.getElementById('ignoreRuleOrigin').value.trim(),
+                pathPrefix: document.getElementById('ignoreRulePathPrefix').value.trim(),
+                enabled: ignoreRuleEditingID ? adminState.discoveryIgnoreRules.find(rule => rule.id === ignoreRuleEditingID)?.enabled ?? true : true
+            };
+        }
+
+        function invalidateIgnoreRulePreview() {
+            ignoreRulePreviewSignature = null;
+            document.getElementById('ignoreRuleSaveButton').disabled = true;
+            document.getElementById('ignoreRulePreviewResults').textContent = 'Preview this rule before saving.';
+        }
+
+        function openIgnoreRuleEditor(rule = null, route = null) {
+            ignoreRuleEditingID = rule?.id || null;
+            document.getElementById('ignoreRuleEditorTitle').textContent = rule ? 'Edit ignore rule' : 'New ignore rule';
+            document.getElementById('ignoreRuleSource').value = rule?.source || route?.source || 'docker';
+            document.getElementById('ignoreRuleOrigin').value = rule?.origin || route?.origin || '';
+            document.getElementById('ignoreRulePathPrefix').value = rule?.pathPrefix || route?.pathPrefix || '';
+            document.getElementById('ignoreRuleEditor').hidden = false;
+            invalidateIgnoreRulePreview();
+            document.getElementById('ignoreRulePathPrefix').focus();
+        }
+
+        function renderDiscoveryIgnoreRules() {
+            const section = document.getElementById('discoveryIgnoreRulesSection');
+            if (!section) return;
+            const rules = adminState.discoveryIgnoreRules || [];
+            const matches = adminState.discoveryRuleMatches || [];
+            section.innerHTML = `<div class="admin-section-header"><h4>Ignore rules (${rules.length})</h4><button type="button" class="bulk-action-btn secondary" data-ignore-rule-action="new">New ignore rule</button></div>
+                <p class="settings-desc">Enabled rules remove matching discovered routes from the inbox. Published apps are unaffected.</p>
+                ${rules.map(rule => `<div class="discovered-app-item ignore-rule-row" data-rule-id="${Number(rule.id)}">
+                    <div class="discovered-app-info"><div class="discovered-app-name">${escapeHtml(rule.origin + rule.pathPrefix)}</div>
+                    <div class="discovered-app-badges"><span class="discovered-source-badge">${escapeHtml(rule.source)}</span><span class="discovered-status-badge">${rule.enabled ? 'Enabled' : 'Disabled'}</span><span>${matches.filter(match => match.ruleId === rule.id).length} current matches</span></div></div>
+                    <div class="admin-item-actions"><button type="button" class="admin-action-btn discovery-text-action" data-ignore-rule-action="edit" aria-label="Edit rule">Edit</button>
+                    <button type="button" class="admin-action-btn discovery-text-action" data-ignore-rule-action="toggle" aria-label="${rule.enabled ? 'Disable rule' : 'Enable rule'}">${rule.enabled ? 'Disable' : 'Enable'}</button>
+                    <button type="button" class="admin-action-btn discovery-text-action danger" data-ignore-rule-action="delete" aria-label="Delete rule">Delete</button></div></div>`).join('')}`;
+        }
+
+        function renderRuleMatchedDiscoveredApps() {
+            const section = document.getElementById('discoveryRuleMatchedSection');
+            if (!section) return;
+            const matches = adminState.discoveryRuleMatches || [];
+            if (!matches.length) { section.innerHTML = ''; return; }
+            const activeByKey = new Map((adminState.discoveredApps || []).map(app => [discoveredAppKey(app), app]));
+            const ignoredKeys = new Set((adminState.ignoredDiscoveredApps || []).map(discoveredAppKey));
+            const searchTerm = (document.getElementById('discoveredSearchInput')?.value || '').toLowerCase();
+            const sourceFilter = adminState.discoveredSourceFilter || 'all';
+            const visible = matches.map(match => ({ match, app: activeByKey.get(discoveredAppKey(match)) }))
+                .filter(({ match, app }) => app && !ignoredKeys.has(discoveredAppKey(match)) &&
+                    (sourceFilter === 'all' || match.source === sourceFilter) &&
+                    (!searchTerm || (app.name || '').toLowerCase().includes(searchTerm) || app.url.toLowerCase().includes(searchTerm)));
+            const wasOpen = section.querySelector('details')?.open || false;
+            section.innerHTML = `<details ${wasOpen ? 'open' : ''}><summary>Rule matched (${visible.length === matches.length ? `${matches.length} rule matched` : `${visible.length} of ${matches.length} match`})</summary>
+                <p class="settings-desc">These routes remain discovered. Edit or disable a rule to return them to the inbox.</p>
+                ${visible.length ? visible.map(({ match, app }) => `<div class="discovered-app-item"><div class="discovered-app-info">
+                    <div class="discovered-app-name">${escapeHtml(app.name || app.url)}</div><div class="discovered-app-url">${escapeHtml(app.url)}</div>
+                    <div class="discovered-app-badges"><span class="discovered-source-badge">${escapeHtml(app.source)}</span></div></div>
+                    <div class="admin-item-actions"><button type="button" class="admin-action-btn discovery-text-action" data-edit-matched-rule="${Number(match.ruleId)}">Edit rule</button></div></div>`).join('') : '<div class="admin-empty">No rule-matched apps match the current search or source filter.</div>'}</details>`;
+        }
+
+        async function previewIgnoreRule() {
+            const input = ignoreRuleFormValue();
+            invalidateIgnoreRulePreview();
+            try {
+                const resp = await fetch('/api/admin/discovery-ignore-rules/preview', {
+                    method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
+                });
+                if (!resp.ok) {
+                    const body = await resp.json().catch(() => ({}));
+                    throw new Error(body.error || `Preview failed (${resp.status})`);
+                }
+                const data = await resp.json();
+                if (JSON.stringify(input) !== JSON.stringify(ignoreRuleFormValue())) return;
+                const results = document.getElementById('ignoreRulePreviewResults');
+                results.innerHTML = `<p>${Number(data.count)} current inbox routes. Future routes may also match.</p>
+                    ${(data.matches || []).map(app => `<div class="ignore-rule-preview-row"><strong>${escapeHtml(app.name || app.url)}</strong> <span>${escapeHtml(app.source)}</span><div>${escapeHtml(app.url)}</div></div>`).join('')}
+                    ${data.count > (data.matches || []).length ? `<p>Showing first ${(data.matches || []).length} matches.</p>` : ''}`;
+                ignoreRulePreviewSignature = JSON.stringify(input);
+                document.getElementById('ignoreRuleSaveButton').disabled = false;
+            } catch (e) {
+                showToast('Error: ' + e.message);
+            }
+        }
+
+        async function writeIgnoreRule(method, path, input, successMessage) {
+            try {
+                const resp = await fetch(path, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...(input ? { body: JSON.stringify(input) } : {}) });
+                if (!resp.ok) {
+                    const body = await resp.json().catch(() => ({}));
+                    throw new Error(body.error || `Rule request failed (${resp.status})`);
+                }
+                try {
+                    await loadDiscoveredAppsData(true);
+                } catch (_) {
+                    showToast('Saved, but refresh failed. Use Refresh discovered list to retry.');
+                    return false;
+                }
+                showToast(successMessage);
+                return true;
+            } catch (e) {
+                showToast('Error: ' + e.message);
+                return false;
+            }
+        }
+
+        async function saveIgnoreRule() {
+            const input = ignoreRuleFormValue();
+            if (JSON.stringify(input) !== ignoreRulePreviewSignature) { invalidateIgnoreRulePreview(); return; }
+            const id = ignoreRuleEditingID;
+            if (await writeIgnoreRule(id ? 'PUT' : 'POST', id ? `/api/admin/discovery-ignore-rules/${id}` : '/api/admin/discovery-ignore-rules', input, 'Ignore rule saved')) {
+                document.getElementById('ignoreRuleEditor').hidden = true;
+                invalidateIgnoreRulePreview();
+            }
+        }
+
+        document.getElementById('discoveredAppsList')?.addEventListener('click', event => {
+            if (!event.target.closest('.ignore-rule-from-route')) return;
+            const key = event.target.closest('.discovered-app-item')?.dataset.discoveryKey;
+            if (!key) return;
+            const [source, url] = JSON.parse(key);
+            try {
+                const parsed = new URL(url);
+                openIgnoreRuleEditor(null, { source, origin: parsed.origin, pathPrefix: parsed.pathname === '/' ? '' : parsed.pathname });
+            } catch (_) { showToast('Cannot create a rule for this URL'); }
+        });
+        document.getElementById('discoveryIgnoreRulesSection')?.addEventListener('click', event => {
+            const action = event.target.closest('[data-ignore-rule-action]')?.dataset.ignoreRuleAction;
+            if (!action) return;
+            if (action === 'new') { openIgnoreRuleEditor(); return; }
+            const id = Number(event.target.closest('.ignore-rule-row')?.dataset.ruleId);
+            const rule = adminState.discoveryIgnoreRules.find(item => item.id === id);
+            if (!rule) return;
+            if (action === 'edit') { openIgnoreRuleEditor(rule); return; }
+            if (action === 'toggle') writeIgnoreRule('PUT', `/api/admin/discovery-ignore-rules/${id}`, { source: rule.source, origin: rule.origin, pathPrefix: rule.pathPrefix, enabled: !rule.enabled }, rule.enabled ? 'Ignore rule disabled' : 'Ignore rule enabled');
+            if (action === 'delete') writeIgnoreRule('DELETE', `/api/admin/discovery-ignore-rules/${id}`, null, 'Ignore rule deleted');
+        });
+        document.getElementById('discoveryRuleMatchedSection')?.addEventListener('click', event => {
+            const id = Number(event.target.closest('[data-edit-matched-rule]')?.dataset.editMatchedRule);
+            const rule = adminState.discoveryIgnoreRules.find(item => item.id === id);
+            if (rule) openIgnoreRuleEditor(rule);
+        });
+        ['ignoreRuleSource', 'ignoreRuleOrigin', 'ignoreRulePathPrefix'].forEach(id => {
+            const field = document.getElementById(id);
+            field?.addEventListener('input', invalidateIgnoreRulePreview);
+            field?.addEventListener('change', invalidateIgnoreRulePreview);
+        });
+        document.getElementById('ignoreRulePreviewButton')?.addEventListener('click', previewIgnoreRule);
+        document.getElementById('ignoreRuleSaveButton')?.addEventListener('click', saveIgnoreRule);
+        document.getElementById('ignoreRuleCancelButton')?.addEventListener('click', () => {
+            document.getElementById('ignoreRuleEditor').hidden = true;
+            invalidateIgnoreRulePreview();
+        });
 
         async function changeIgnoredDiscoveredApps(action, items) {
             try {

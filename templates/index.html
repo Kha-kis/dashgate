@@ -3996,7 +3996,7 @@ environment:
                   <input
                     type="text"
                     id="discoveredSearchInput"
-                    placeholder="Search inbox and ignored apps..."
+                    placeholder="Search inbox, rule matched, and ignored apps..."
                     class="admin-search-input"
                     oninput="filterDiscoveredApps()"
                   />
@@ -4071,6 +4071,28 @@ environment:
                   <div class="admin-loading">Loading discovered apps...</div>
                 </div>
                 <div id="discoveredIgnoredSection"></div>
+                <div id="discoveryIgnoreRulesSection"></div>
+                <div id="ignoreRuleEditor" class="ignore-rule-editor" hidden>
+                  <h4 id="ignoreRuleEditorTitle">New ignore rule</h4>
+                  <p class="settings-desc">Rules remove matching routes from this inbox, including routes found later. They do not change published apps.</p>
+                  <label for="ignoreRuleSource">Discovery source</label>
+                  <select id="ignoreRuleSource">
+                    <option value="docker">Docker</option><option value="traefik">Traefik</option>
+                    <option value="nginx">Nginx</option><option value="npm">NPM</option>
+                    <option value="caddy">Caddy</option><option value="unraid">Unraid</option>
+                  </select>
+                  <label for="ignoreRuleOrigin">Origin</label>
+                  <input id="ignoreRuleOrigin" type="url" placeholder="https://example.com" />
+                  <label for="ignoreRulePathPrefix">Path prefix</label>
+                  <input id="ignoreRulePathPrefix" type="text" placeholder="/health" />
+                  <div class="ignore-rule-editor-actions">
+                    <button type="button" class="bulk-action-btn secondary" id="ignoreRulePreviewButton">Preview rule</button>
+                    <button type="button" class="bulk-action-btn" id="ignoreRuleSaveButton" disabled>Save rule</button>
+                    <button type="button" class="bulk-action-btn secondary" id="ignoreRuleCancelButton">Cancel</button>
+                  </div>
+                  <div id="ignoreRulePreviewResults" role="status" aria-live="polite"></div>
+                </div>
+                <div id="discoveryRuleMatchedSection"></div>
                 <div id="discoveredStaleSection" style="display: none"></div>
               </div>
             </div>

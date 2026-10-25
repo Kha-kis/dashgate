@@ -112,6 +112,155 @@ test.describe("Admin Panel", () => {
     await expect(page.locator('#discoveredAppsList')).not.toContainText('Published');
   });
 
+  test("discovery ignore rules preview, save, disable, and restore inbox routes", async ({ page }) => {
+    const active = [
+      { name: 'Health', url: 'https://routes.test/health', source: 'nginx', icon: '', description: '', override: null },
+      { name: 'Health live', url: 'https://routes.test/health/live', source: 'nginx', icon: '', description: '', override: null },
+      { name: 'Published', url: 'https://routes.test/health/published', source: 'nginx', icon: '', description: '', override: { hidden: false } },
+    ];
+    const rules: { id: number; source: string; origin: string; pathPrefix: string; enabled: boolean }[] = [];
+    const currentMatches = () => active
+      .filter(app => !app.override && rules.some(rule => rule.enabled && app.source === rule.source && app.url.startsWith(rule.origin + rule.pathPrefix)))
+      .map(app => ({ source: app.source, url: app.url, ruleId: rules[0].id }));
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({
+      json: { active, stale: [], ignored: [], ignoreRules: rules, ruleMatches: currentMatches() },
+    }));
+    await page.route('**/api/admin/discovery-ignore-rules**', async route => {
+      const path = new URL(route.request().url()).pathname;
+      const method = route.request().method();
+      if (path.endsWith('/preview')) {
+        const input = route.request().postDataJSON();
+        const matches = active.filter(app => !app.override && app.source === input.source && app.url.startsWith(input.origin + input.pathPrefix));
+        await route.fulfill({ json: { count: matches.length, matches } });
+      } else if (method === 'POST') {
+        const rule = { id: 1, ...route.request().postDataJSON() };
+        rules.push(rule);
+        await route.fulfill({ status: 201, json: { rule } });
+      } else if (method === 'PUT') {
+        Object.assign(rules[0], route.request().postDataJSON());
+        await route.fulfill({ json: { status: 'ok' } });
+      } else if (method === 'DELETE') {
+        rules.splice(0, 1);
+        await route.fulfill({ json: { status: 'ok' } });
+      } else {
+        await route.fulfill({ json: { rules } });
+      }
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await expect(page.locator('#discoveredCountBadge')).toHaveText('2');
+    await page.locator('#discoveredAppsList .discovered-app-item').filter({ hasText: 'Health live' }).getByRole('button', { name: 'Ignore similar routes' }).click();
+    await expect(page.locator('#ignoreRuleSource')).toHaveValue('nginx');
+    await expect(page.locator('#ignoreRuleOrigin')).toHaveValue('https://routes.test');
+    await expect(page.locator('#ignoreRuleSaveButton')).toBeDisabled();
+    await page.locator('#ignoreRulePathPrefix').fill('/health');
+    await page.getByRole('button', { name: 'Preview rule' }).click();
+    await expect(page.locator('#ignoreRulePreviewResults')).toContainText('2 current inbox routes');
+    await expect(page.locator('#ignoreRulePreviewResults')).toContainText('Future routes may also match');
+    await expect(page.locator('#ignoreRuleSaveButton')).toBeEnabled();
+    await page.locator('#ignoreRulePathPrefix').fill('/health/live');
+    await expect(page.locator('#ignoreRuleSaveButton')).toBeDisabled();
+    await page.locator('#ignoreRulePathPrefix').fill('/health');
+    await page.getByRole('button', { name: 'Preview rule' }).click();
+    await page.locator('#ignoreRuleSaveButton').click();
+    await expect(page.locator('#discoveredCountBadge')).toBeHidden();
+    await expect(page.locator('#discoveryRuleMatchedSection')).toContainText('2 rule matched');
+    await expect(page.locator('#discoveryRuleMatchedSection')).not.toContainText('Published');
+    await page.locator('#discoveryRuleMatchedSection summary').click();
+    await page.locator('#discoveredSearchInput').fill('live');
+    await expect(page.locator('#discoveryRuleMatchedSection .discovered-app-item')).toHaveCount(1);
+    await page.locator('#discoveredSearchInput').fill('');
+    await page.locator('#discoveryIgnoreRulesSection').getByRole('button', { name: 'Disable rule' }).click();
+    await expect(page.locator('#discoveredCountBadge')).toHaveText('2');
+    await page.locator('#discoveryIgnoreRulesSection').getByRole('button', { name: 'Edit rule' }).click();
+    await page.getByRole('button', { name: 'Preview rule' }).click();
+    await page.locator('#ignoreRuleSaveButton').click();
+    await expect(page.locator('#discoveredCountBadge')).toHaveText('2');
+    await page.locator('#discoveryIgnoreRulesSection').getByRole('button', { name: 'Enable rule' }).click();
+    await expect(page.locator('#discoveredCountBadge')).toBeHidden();
+    await page.locator('#discoveryIgnoreRulesSection').getByRole('button', { name: 'Delete rule' }).click();
+    await expect(page.locator('#discoveredCountBadge')).toHaveText('2');
+  });
+
+  test("discovery ignore rule explains manual restore precedence", async ({ page }) => {
+    const app = { name: 'Health', url: 'https://routes.test/health', source: 'nginx', icon: '', description: '', override: null };
+    const rule = { id: 3, source: 'nginx', origin: 'https://routes.test', pathPrefix: '/health', enabled: true };
+    let ignored = true;
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: {
+      active: [app], stale: [], ignored: ignored ? [app] : [], ignoreRules: [rule],
+      ruleMatches: [{ source: app.source, url: app.url, ruleId: rule.id }],
+    } }));
+    await page.route('**/api/admin/discovered-apps/ignored', route => {
+      ignored = false;
+      return route.fulfill({ json: { status: 'ok' } });
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await page.locator('#discoveredIgnoredSection summary').click();
+    await expect(page.locator('#discoveredIgnoredSection')).toContainText('still keep this route out of the inbox after Restore');
+    await page.locator('#discoveredIgnoredSection').getByRole('button', { name: 'Restore' }).click();
+    await expect(page.locator('#discoveredCountBadge')).toBeHidden();
+    await expect(page.locator('#discoveryRuleMatchedSection')).toContainText('1 rule matched');
+  });
+
+  test("discovery ignore rule save and refresh failures preserve inbox rows", async ({ page }) => {
+    const active = [{ name: 'Webhook', url: 'https://routes.test/hooks', source: 'nginx', icon: '', description: '', override: null }];
+    let listFails = false;
+    await page.route('**/api/admin/discovered-apps', route => listFails
+      ? route.fulfill({ status: 500, json: { error: 'List unavailable' } })
+      : route.fulfill({ json: { active, stale: [], ignored: [], ignoreRules: [], ruleMatches: [] } }));
+    await page.route('**/api/admin/discovery-ignore-rules**', route => {
+      if (new URL(route.request().url()).pathname.endsWith('/preview')) {
+        return route.fulfill({ json: { count: 1, matches: active } });
+      }
+      return route.fulfill({ status: 500, json: { error: 'Save unavailable' } });
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await page.locator('#discoveredAppsList').getByRole('button', { name: 'Ignore similar routes' }).click();
+    await page.getByRole('button', { name: 'Preview rule' }).click();
+    await page.locator('#ignoreRuleSaveButton').click();
+    await expect(page.locator('#discoveredAppsList')).toContainText('Webhook');
+    await expect(page.locator('#toast')).toContainText('Save unavailable');
+    listFails = true;
+    await page.getByRole('button', { name: 'Refresh discovered list' }).click();
+    await expect(page.locator('#discoveredAppsList')).toContainText('Webhook');
+    await expect(page.locator('#toast')).toContainText('Failed to refresh');
+  });
+
+  test("discovery ignore rule may cover future routes after an empty preview", async ({ page }) => {
+    const rules: { id: number; source: string; origin: string; pathPrefix: string; enabled: boolean }[] = [];
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({
+      json: { active: [], stale: [], ignored: [], ignoreRules: rules, ruleMatches: [] },
+    }));
+    await page.route('**/api/admin/discovery-ignore-rules**', route => {
+      if (new URL(route.request().url()).pathname.endsWith('/preview')) {
+        return route.fulfill({ json: { count: 0, matches: [] } });
+      }
+      const rule = { id: 1, ...route.request().postDataJSON() };
+      rules.push(rule);
+      return route.fulfill({ status: 201, json: { rule } });
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await page.locator('#discoveryIgnoreRulesSection').getByRole('button', { name: 'New ignore rule' }).click();
+    await page.locator('#ignoreRuleSource').selectOption('nginx');
+    await page.locator('#ignoreRuleOrigin').fill('https://future.test');
+    await page.locator('#ignoreRulePathPrefix').fill('/hooks');
+    await page.getByRole('button', { name: 'Preview rule' }).click();
+    await expect(page.locator('#ignoreRulePreviewResults')).toContainText('0 current inbox routes');
+    await page.locator('#ignoreRuleSaveButton').click();
+    await expect(page.locator('#discoveryIgnoreRulesSection')).toContainText('https://future.test/hooks');
+  });
+
   test("search and source filters include Ignored routes without changing inbox count", async ({ page }) => {
     const active = [
       { name: 'Active route', url: 'https://active.test', source: 'docker', icon: '', description: '' },
