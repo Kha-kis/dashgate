@@ -1,0 +1,6 @@
+[Unit]
+Description=Record DashGate backup failure for %i
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/logger -p daemon.err -t dashgate-backup "Backup failed: %i; inspect journalctl -u dashgate-backup.service"

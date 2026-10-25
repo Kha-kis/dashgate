@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily verified DashGate backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+Unit=dashgate-backup.service
+
+[Install]
+WantedBy=timers.target

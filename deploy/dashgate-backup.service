@@ -1,0 +1,8 @@
+[Unit]
+Description=Verified DashGate backup
+OnFailure=dashgate-backup-failure@%n.service
+
+[Service]
+Type=oneshot
+User=khak1s
+ExecStart=/usr/bin/flock -n /run/lock/dashgate-backup.lock /usr/bin/python3 /opt/dashgate/backup_compose.py --compose /opt/dashgate/docker-compose.yml --data-dir /home/khak1s/.config/dashgate --backup-root /home/khak1s/dashgate-backups/scheduled --keep 14 --metrics-file /opt/prometheus/node-exporter-textfile/dashgate-backup.prom
