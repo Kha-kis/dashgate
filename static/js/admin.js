@@ -21,6 +21,8 @@ let adminState = {
   discoveredApps: [],
   staleOverrides: [],
   ignoredDiscoveredApps: [],
+  discoveryIgnoreRules: [],
+  discoveryRuleMatches: [],
   discoveredSourceFilter: "all",
   selectedDiscoveredApps: new Set(),
   filteredDiscoveredApps: [],

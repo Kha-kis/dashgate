@@ -172,6 +172,16 @@ func InitDatabase(app *server.App) error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY(source, url)
 	);
+	CREATE TABLE IF NOT EXISTS discovery_ignore_rules (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		source TEXT NOT NULL,
+		origin TEXT NOT NULL,
+		path_prefix TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(source, origin, path_prefix)
+	);
 
 	CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 	CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
