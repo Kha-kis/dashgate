@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Repository
+
+- Moved host-specific deployment and backup automation to separate private operations tooling. DashGate application behavior is unchanged.
+
 ## [1.5.6] - 2026-10-24
 
 ### Improved

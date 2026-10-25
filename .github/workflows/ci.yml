@@ -30,9 +30,6 @@ jobs:
       - name: Unit tests
         run: go test ./... -v
 
-      - name: Deployment and backup helper tests
-        run: python3 -m unittest discover -s scripts -p 'test_*.py' -q
-
       - name: Build binary
         run: CGO_ENABLED=1 go build -ldflags="-s -w" -o dashgate .
 
