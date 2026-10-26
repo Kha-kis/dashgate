@@ -26,6 +26,9 @@ let adminState = {
   discoveredSourceFilter: "all",
   selectedDiscoveredApps: new Set(),
   filteredDiscoveredApps: [],
+  discoveredAppsAvailable: false,
+  appsCatalogAvailable: false,
+  discoveryScanStatus: {},
 };
 
 async function loadAdminData() {
@@ -44,7 +47,12 @@ async function loadAdminData() {
 
     if (appsResp.ok) {
       adminState.apps = await appsResp.json();
+      adminState.appsCatalogAvailable = true;
       renderAppsList();
+      if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
+    } else {
+      adminState.appsCatalogAvailable = false;
+      if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
     }
 
     if (categoriesResp.ok) {
@@ -176,9 +184,14 @@ async function reloadApps() {
     ]);
     if (appsResp.ok) {
       adminState.apps = await appsResp.json();
+      adminState.appsCatalogAvailable = true;
       renderAppsList();
       renderDiscoveredAppsList();
+      if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
       await loadAccessUsers();
+    } else {
+      adminState.appsCatalogAvailable = false;
+      if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
     }
     if (categoriesResp.ok) {
       adminState.categories = await categoriesResp.json();
