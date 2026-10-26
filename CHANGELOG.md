@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.5.8] - 2026-10-26
+
+### Improved
+
+- **Discovery inbox triage** — unconfigured routes whose HTTP(S) URL matches a published dashboard app move into a collapsed **Already added** list. Admins can search and filter the list and inspect the matching app and full route URL. Routes return to the inbox if the published app is removed or its URL changes. Hidden, Ignored, and rule-matched routes retain their existing behavior.
+
+### Upgrade
+
+- No database migration or new configuration is required. Back up the persistent `/config` directory before upgrading. The new grouping does not change published apps or dashboard access.
+
 ## [1.5.7] - 2026-10-25
 
 ### Added
