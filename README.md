@@ -209,6 +209,17 @@ labels:
   - "dashgate.description=Description"
 ```
 
+DashGate also discovers containers labeled for Homepage when both `homepage.name` and `homepage.href` are present:
+
+```yaml
+labels:
+  - "homepage.name=My App"
+  - "homepage.href=https://app.example.com"
+  - "homepage.description=Description" # optional
+```
+
+The route appears in the existing discovery inbox for admin review. Only the name, HTTP(S) URL, and description are read. Homepage's `group` is a display category and is never used as a DashGate access group; `icon` and `widget.*` labels are not imported. Configure the category, icon, and access groups in DashGate before publishing. An explicit `dashgate.enable=false` excludes a container, and `dashgate.enable=true` uses only DashGate labels.
+
 Requires mounting the Docker socket: `-v /var/run/docker.sock:/var/run/docker.sock:ro`
 
 **Using a Docker Socket Proxy (recommended for security):**
