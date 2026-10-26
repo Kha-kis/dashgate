@@ -68,6 +68,83 @@ test.describe("Admin Panel", () => {
     await expect(page.locator('#discoveredAppsList')).toContainText('Nginx Found');
   });
 
+  test("already added discovery routes stay inspectable and return when a published app is removed", async ({ page }) => {
+    let includeGrafana = true;
+    const active = [
+      { name: 'Grafana route', url: 'http://localhost:3000/', source: 'nginx', icon: '', description: '' },
+      { name: 'Grafana API', url: 'http://localhost:3000/api', source: 'nginx', icon: '', description: '' },
+      { name: 'Hidden Prometheus', url: 'http://localhost:9090', source: 'nginx', icon: '', description: '', override: { hidden: true } },
+      { name: 'New candidate', url: 'https://new.example.test', source: 'docker', icon: '', description: '' },
+      { name: 'Ignored route', url: 'https://ignored.example.test', source: 'nginx', icon: '', description: '' },
+      { name: 'Rule route', url: 'https://rule.example.test', source: 'nginx', icon: '', description: '' },
+    ];
+    await page.route('**/api/admin/config/apps', async route => {
+      const response = await route.fetch();
+      const apps = await response.json();
+      await route.fulfill({ json: includeGrafana ? apps : apps.filter((app: { url: string }) => app.url !== 'http://localhost:3000') });
+    });
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: {
+      active,
+      stale: [],
+      ignored: [{ name: 'Ignored route', url: 'https://ignored.example.test', source: 'nginx' }],
+      ruleMatches: [{ url: 'https://rule.example.test', source: 'nginx', ruleId: 1 }],
+    } }));
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+
+    await expect(page.locator('#discoveredCountBadge')).toHaveText('3');
+    await expect(page.locator('#discoveredAppsList')).not.toContainText('Grafana route');
+    await expect(page.locator('#discoveredAppsList')).toContainText('Grafana API');
+    await expect(page.locator('#discoveredAppsList')).toContainText('Hidden Prometheus');
+    await expect(page.locator('#discoveryAlreadyAddedSection summary')).toContainText('1 already added');
+    await page.locator('#discoveryAlreadyAddedSection summary').click();
+    await expect(page.locator('#discoveryAlreadyAddedSection')).toContainText('Grafana route');
+    await expect(page.locator('#discoveryAlreadyAddedSection')).toContainText('Grafana');
+    await expect(page.locator('#discoveryAlreadyAddedSection')).not.toContainText('Ignored route');
+    await expect(page.locator('#discoveryAlreadyAddedSection')).not.toContainText('Rule route');
+    await page.locator('#discoveredSourceFilters button').filter({ hasText: 'Docker' }).click();
+    await expect(page.locator('#discoveryAlreadyAddedSection .discovered-app-item')).toHaveCount(0);
+    await expect(page.locator('#discoveryAlreadyAddedSection summary')).toContainText('0 of 1 match');
+    await page.locator('#discoveredSourceFilters button').filter({ hasText: 'All' }).click();
+    await page.locator('#discoveredSearchInput').fill('Grafana route');
+    await expect(page.locator('#discoveryAlreadyAddedSection .discovered-app-item')).toHaveCount(1);
+    await page.locator('#discoveredSearchInput').fill('');
+
+    includeGrafana = false;
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await expect(page.locator('#discoveredCountBadge')).toHaveText('4');
+    await expect(page.locator('#discoveredAppsList')).toContainText('Grafana route');
+    await expect(page.locator('#discoveryAlreadyAddedSection')).toBeEmpty();
+  });
+
+  test("already added routes reveal the full URL on a narrow screen", async ({ page }) => {
+    const longURL = 'https://long.example.test/apps/monitoring/a-very-long-route-name-that-identifies-the-service?instance=production&region=central';
+    await page.route('**/api/admin/config/apps', async route => {
+      const response = await route.fetch();
+      const apps = await response.json();
+      await route.fulfill({ json: [...apps, { source: 'config', name: 'Long app', url: longURL }] });
+    });
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: {
+      active: [{ name: 'Long route', url: longURL, source: 'nginx', icon: '', description: '' }],
+      stale: [],
+    } }));
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await page.locator('#discoveryAlreadyAddedSection summary').click();
+    const url = page.locator('#discoveryAlreadyAddedSection .discovered-app-url');
+    await expect(url).toHaveText(longURL);
+    expect(await url.evaluate(element => getComputedStyle(element).whiteSpace)).toBe('normal');
+    expect(await url.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  });
+
   test("discovery inbox dismisses, bulk dismisses, and restores without changing published apps", async ({ page }) => {
     const active = [
       { name: 'Webhook', url: 'https://one.test/hook', source: 'nginx', icon: '', description: '' },

@@ -177,6 +177,7 @@ async function reloadApps() {
     if (appsResp.ok) {
       adminState.apps = await appsResp.json();
       renderAppsList();
+      renderDiscoveredAppsList();
       await loadAccessUsers();
     }
     if (categoriesResp.ok) {
