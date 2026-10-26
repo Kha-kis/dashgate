@@ -37,3 +37,11 @@ test('already added discovery recognizes a configured discovered app effective U
   assert.equal(match({ url: 'https://source.example.test' }), null);
   assert.equal(match({ url: 'https://hidden.example.test' }), null);
 });
+
+test('already added discovery excludes configured routes skipped by dashboard URL de-duplication', () => {
+  const match = loadMatcher(
+    [{ source: 'config', name: 'Manual', url: 'https://raw.example.test' }],
+    [{ name: 'Discovered', url: 'https://raw.example.test', source: 'nginx', override: { hidden: false, urlOverride: 'https://other.example.test' } }],
+  );
+  assert.equal(match({ url: 'https://other.example.test' }), null);
+});

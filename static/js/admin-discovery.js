@@ -804,7 +804,11 @@
                     return { name: app.name, url: app.url };
                 }
             }
+            // The dashboard omits a discovered app when its original URL exactly
+            // duplicates a manual app, even if its override points elsewhere.
+            const configURLs = new Set((adminState.apps || []).filter(app => app.source === 'config').map(app => app.url));
             for (const app of adminState.discoveredApps || []) {
+                if (configURLs.has(app.url)) continue;
                 const override = app.override;
                 if (override && !override.hidden && canonicalURL(override.urlOverride || app.url) === routeURL) {
                     return { name: override.nameOverride || app.name, url: override.urlOverride || app.url };

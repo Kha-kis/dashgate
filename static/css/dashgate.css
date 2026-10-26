@@ -3034,6 +3034,13 @@
             text-overflow: ellipsis;
         }
 
+        #discoveryAlreadyAddedSection .discovered-app-url,
+        #discoveryAlreadyAddedSection .discovered-app-name {
+            white-space: normal;
+            overflow: visible;
+            overflow-wrap: anywhere;
+        }
+
         .discovered-app-badges {
             display: flex;
             gap: 4px;

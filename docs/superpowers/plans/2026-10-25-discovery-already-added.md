@@ -21,6 +21,8 @@
 - Published app URL with implicit root slash versus discovered explicit root slash: group together.
 - Path or query near matches: stay actionable.
 - Hidden override matching a published app URL: stay actionable.
+- A discovered override whose raw URL duplicates a manual app cannot make another route Already added.
+- Long names and URLs remain readable in the expanded section on narrow screens.
 - Deleted or edited published app: route returns to the inbox after apps reload.
 - Search and source filters: apply to Already added independently, without changing its total count or bulk selection.
 
@@ -29,7 +31,7 @@
 ### Task 1: Group already published routes in Admin > Content
 
 **Files:**
-- Modify: `static/js/admin-discovery.js`, `static/js/admin.js`, `templates/index.html`, `README.md`
+- Modify: `static/js/admin-discovery.js`, `static/js/admin.js`, `static/css/dashgate.css`, `templates/index.html`, `README.md`
 - Test: `test/discovery-already-added.test.cjs`, `e2e/tests/admin.spec.ts`
 
 **Interfaces:**

@@ -9,6 +9,8 @@ The live v1.5.7 inbox contains 53 actionable routes, 29 of which have the same n
 - Move an unconfigured discovered route whose URL matches a published app into a collapsed **Already added** section in Admin > Content. Show its discovered name, source, URL, and matching dashboard app name. The section uses the existing search and source filters.
 - Compute matches from current published manual apps and published discovered apps. Do not persist a dismissal or create an override. If the published app is removed or its URL changes, the route returns to the inbox on refresh.
 - Compare absolute HTTP(S) URLs after standard URL parsing. Scheme, host, effective port, path, and query must match. Preserve meaningful path case and non-root trailing slashes. Invalid and non-HTTP(S) URLs never match.
+- A configured discovered app whose original URL duplicates a manual app is omitted by the dashboard and cannot make another route Already added through its URL override.
+- Show the full discovered name and URL in the expanded section, including long paths and queries on narrow screens.
 - Leave Hidden discovered overrides in the actionable inbox. Apply manual dismissal and ignore rules before the Already added grouping. Published apps, access groups, visibility, and discovery source settings are unchanged.
 - The inbox badge and bulk selection count only actionable routes. Already added entries have no Configure or Dismiss control in their collapsed section.
 

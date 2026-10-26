@@ -122,6 +122,29 @@ test.describe("Admin Panel", () => {
     await expect(page.locator('#discoveryAlreadyAddedSection')).toBeEmpty();
   });
 
+  test("already added routes reveal the full URL on a narrow screen", async ({ page }) => {
+    const longURL = 'https://long.example.test/apps/monitoring/a-very-long-route-name-that-identifies-the-service?instance=production&region=central';
+    await page.route('**/api/admin/config/apps', async route => {
+      const response = await route.fetch();
+      const apps = await response.json();
+      await route.fulfill({ json: [...apps, { source: 'config', name: 'Long app', url: longURL }] });
+    });
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: {
+      active: [{ name: 'Long route', url: longURL, source: 'nginx', icon: '', description: '' }],
+      stale: [],
+    } }));
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await page.locator('#discoveryAlreadyAddedSection summary').click();
+    const url = page.locator('#discoveryAlreadyAddedSection .discovered-app-url');
+    await expect(url).toHaveText(longURL);
+    expect(await url.evaluate(element => getComputedStyle(element).whiteSpace)).toBe('normal');
+    expect(await url.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  });
+
   test("discovery inbox dismisses, bulk dismisses, and restores without changing published apps", async ({ page }) => {
     const active = [
       { name: 'Webhook', url: 'https://one.test/hook', source: 'nginx', icon: '', description: '' },
