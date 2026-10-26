@@ -657,8 +657,15 @@
             const ignoredKeys = new Set(ignored.map(a => discoveredAppKey(a)));
             const ruleKeys = new Set((adminState.discoveryRuleMatches || []).map(a => discoveredAppKey(a)));
 
-            // Inbox: only unconfigured apps OR hidden apps
-            let apps = allDiscovered.filter(a => (!a.override || a.override.hidden) && !ignoredKeys.has(discoveredAppKey(a)) && !ruleKeys.has(discoveredAppKey(a)));
+            // Manual dismissals and rules take precedence over the display-only Already added group.
+            const candidates = allDiscovered.filter(a => (!a.override || a.override.hidden) && !ignoredKeys.has(discoveredAppKey(a)) && !ruleKeys.has(discoveredAppKey(a)));
+            const alreadyAdded = [];
+            let apps = [];
+            for (const app of candidates) {
+                const publishedApp = !app.override && publishedAppForDiscoveredRoute(app);
+                if (publishedApp) alreadyAdded.push({ app, publishedApp });
+                else apps.push(app);
+            }
             const actionableKeys = new Set(apps.map(discoveredAppKey));
             for (const key of adminState.selectedDiscoveredApps) {
                 if (!actionableKeys.has(key)) adminState.selectedDiscoveredApps.delete(key);
@@ -668,6 +675,7 @@
                 container.innerHTML = '<div class="admin-empty">No discovered apps. Enable a discovery source in the Discovery settings.</div>';
                 badge.style.display = 'none';
                 adminState.filteredDiscoveredApps = [];
+                renderAlreadyAddedDiscoveredApps(alreadyAdded);
                 renderIgnoredDiscoveredApps();
                 renderDiscoveryIgnoreRules();
                 renderRuleMatchedDiscoveredApps();
@@ -701,6 +709,7 @@
             if (apps.length === 0) {
                 container.innerHTML = '<div class="admin-empty">No actionable discovered apps.</div>';
                 adminState.filteredDiscoveredApps = [];
+                renderAlreadyAddedDiscoveredApps(alreadyAdded);
                 renderIgnoredDiscoveredApps();
                 renderDiscoveryIgnoreRules();
                 renderRuleMatchedDiscoveredApps();
@@ -767,6 +776,7 @@
 
             updateBulkActionBar();
 
+            renderAlreadyAddedDiscoveredApps(alreadyAdded);
             renderIgnoredDiscoveredApps();
             renderDiscoveryIgnoreRules();
             renderRuleMatchedDiscoveredApps();
@@ -775,6 +785,60 @@
 
         function discoveredAppKey(app) {
             return JSON.stringify([app.source, app.url]);
+        }
+
+        function publishedAppForDiscoveredRoute(route) {
+            const canonicalURL = value => {
+                try {
+                    const parsed = new URL(value);
+                    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null;
+                } catch (_) {
+                    return null;
+                }
+            };
+            const routeURL = canonicalURL(route.url);
+            if (!routeURL) return null;
+
+            for (const app of adminState.apps || []) {
+                if (app.source === 'config' && canonicalURL(app.url) === routeURL) {
+                    return { name: app.name, url: app.url };
+                }
+            }
+            for (const app of adminState.discoveredApps || []) {
+                const override = app.override;
+                if (override && !override.hidden && canonicalURL(override.urlOverride || app.url) === routeURL) {
+                    return { name: override.nameOverride || app.name, url: override.urlOverride || app.url };
+                }
+            }
+            return null;
+        }
+
+        function renderAlreadyAddedDiscoveredApps(routes) {
+            const section = document.getElementById('discoveryAlreadyAddedSection');
+            if (!section) return;
+            if (routes.length === 0) {
+                section.innerHTML = '';
+                return;
+            }
+            const searchTerm = (document.getElementById('discoveredSearchInput')?.value || '').toLowerCase();
+            const sourceFilter = adminState.discoveredSourceFilter || 'all';
+            const visible = routes.filter(({ app, publishedApp }) =>
+                (sourceFilter === 'all' || app.source === sourceFilter) &&
+                (!searchTerm || app.name.toLowerCase().includes(searchTerm) || app.url.toLowerCase().includes(searchTerm) || publishedApp.name.toLowerCase().includes(searchTerm))
+            );
+            const wasOpen = section.querySelector('details')?.open || false;
+            section.innerHTML = `<details ${wasOpen ? 'open' : ''}>
+                <summary>Already added (${visible.length === routes.length ? `${routes.length} already added` : `${visible.length} of ${routes.length} match`})</summary>
+                <p class="settings-desc">These routes match apps already on the dashboard. Removing or changing the matching app returns them to the inbox.</p>
+                ${visible.length === 0 ? '<div class="admin-empty">No already added apps match the current search or source filter.</div>' : visible.map(({ app, publishedApp }) => `<div class="discovered-app-item">
+                    <div class="discovered-app-info">
+                        <div class="discovered-app-name">${escapeHtml(app.name)}</div>
+                        <div class="discovered-app-url">${escapeHtml(app.url)}</div>
+                        <div class="discovered-app-badges"><span class="discovered-source-badge">${escapeHtml(app.source)}</span></div>
+                        <p class="settings-desc">Already on dashboard as ${escapeHtml(publishedApp.name)}</p>
+                    </div>
+                </div>`).join('')}
+            </details>`;
         }
 
         function renderIgnoredDiscoveredApps() {

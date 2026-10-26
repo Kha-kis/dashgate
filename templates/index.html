@@ -3996,7 +3996,7 @@ environment:
                   <input
                     type="text"
                     id="discoveredSearchInput"
-                    placeholder="Search inbox, rule matched, and ignored apps..."
+                    placeholder="Search inbox, already added, rule matched, and ignored apps..."
                     class="admin-search-input"
                     oninput="filterDiscoveredApps()"
                   />
@@ -4070,6 +4070,7 @@ environment:
                 <div class="discovered-apps-list" id="discoveredAppsList">
                   <div class="admin-loading">Loading discovered apps...</div>
                 </div>
+                <div id="discoveryAlreadyAddedSection"></div>
                 <div id="discoveredIgnoredSection"></div>
                 <div id="discoveryIgnoreRulesSection"></div>
                 <div id="ignoreRuleEditor" class="ignore-rule-editor" hidden>
