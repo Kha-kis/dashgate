@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -180,63 +181,74 @@ func scanDockerApps(app *server.App) (server.DiscoveryScanResult, string) {
 
 	var apps []models.App
 	for _, c := range containers {
-		// Check if container has dashgate labels
-		if c.Labels["dashgate.enable"] != "true" {
-			continue
+		if a := dockerContainerApp(c); a != nil {
+			apps = append(apps, *a)
 		}
+	}
 
+	if len(apps) == 0 && len(containers) > 0 {
+		log.Printf("Docker discovery: found %d containers, 0 with eligible DashGate or Homepage labels", len(containers))
+	} else {
+		log.Printf("Docker discovery: found %d apps (from %d containers)", len(apps), len(containers))
+	}
+	return server.DiscoveryScanResult{Apps: apps}, ""
+}
+
+// dockerContainerApp maps one explicitly labeled Docker container to a route.
+// DashGate labels have priority, including an explicit disabled value.
+func dockerContainerApp(c models.DockerContainer) *models.App {
+	if enabled, present := c.Labels["dashgate.enable"]; present {
+		if enabled != "true" {
+			return nil
+		}
 		name := c.Labels["dashgate.name"]
 		if name == "" {
-			// Use container name if no label
-			if len(c.Names) > 0 {
-				name = strings.TrimPrefix(c.Names[0], "/")
-			} else {
-				continue
+			if len(c.Names) == 0 {
+				return nil
 			}
+			name = strings.TrimPrefix(c.Names[0], "/")
 		}
-
-		url := c.Labels["dashgate.url"]
-		if url == "" {
-			continue
+		appURL := c.Labels["dashgate.url"]
+		if appURL == "" {
+			return nil
 		}
-
-		a := models.App{
-			Name:        name,
-			URL:         url,
-			Icon:        c.Labels["dashgate.icon"],
-			Description: c.Labels["dashgate.description"],
-		}
-
-		// Parse groups
+		a := &models.App{Name: name, URL: appURL, Icon: c.Labels["dashgate.icon"], Description: c.Labels["dashgate.description"]}
 		if groups := c.Labels["dashgate.groups"]; groups != "" {
 			a.Groups = strings.Split(groups, ",")
 			for i := range a.Groups {
 				a.Groups[i] = strings.TrimSpace(a.Groups[i])
 			}
 		}
-
-		// Parse dependencies
 		if deps := c.Labels["dashgate.depends_on"]; deps != "" {
 			a.DependsOn = strings.Split(deps, ",")
 			for i := range a.DependsOn {
 				a.DependsOn[i] = strings.TrimSpace(a.DependsOn[i])
 			}
 		}
-
-		// Set status based on container state
-		if c.State == "running" {
-			a.Status = "online"
-		} else {
-			a.Status = "offline"
-		}
-
-		apps = append(apps, a)
+		setDockerStatus(a, c.State)
+		return a
 	}
 
-	if len(apps) == 0 && len(containers) > 0 {
-		log.Printf("Docker discovery: found %d containers, 0 with dashgate.enable=true label", len(containers))
+	name := strings.TrimSpace(c.Labels["homepage.name"])
+	appURL := strings.TrimSpace(c.Labels["homepage.href"])
+	if name == "" || appURL == "" {
+		return nil
+	}
+	parsed, err := url.Parse(appURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil {
+		return nil
+	}
+	// Homepage's group is a visual category, whereas DashGate groups grant
+	// access. Homepage icons and widget labels are also not DashGate assets.
+	a := &models.App{Name: name, URL: appURL, Description: c.Labels["homepage.description"]}
+	setDockerStatus(a, c.State)
+	return a
+}
+
+func setDockerStatus(a *models.App, state string) {
+	if state == "running" {
+		a.Status = "online"
 	} else {
-		log.Printf("Docker discovery: found %d apps (from %d containers)", len(apps), len(containers))
+		a.Status = "offline"
 	}
-	return server.DiscoveryScanResult{Apps: apps}, ""
 }

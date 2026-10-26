@@ -46,6 +46,7 @@ func TestDockerScanReporting(t *testing.T) {
 		{200, "bad", "failed", "decode_failed", 0},
 		{200, `[]`, "completed", "", 0},
 		{200, `[{"Names":["/one"],"State":"running","Labels":{"dashgate.enable":"true","dashgate.url":"https://one.example"}}]`, "completed", "", 1},
+		{200, `[{"Names":["/one"],"State":"running","Labels":{"homepage.name":"One","homepage.href":"https://one.example"}}]`, "completed", "", 1},
 	} {
 		app.SystemConfig.DockerSocketPath = testDockerSocket(t, tc.status, tc.body)
 		DiscoverDockerApps(app)
