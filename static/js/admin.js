@@ -171,6 +171,8 @@ async function loadAdminData() {
 
   } catch (e) {
     console.error("Failed to load admin data:", e);
+    adminState.appsCatalogAvailable = false;
+    if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
   }
 }
 
@@ -199,6 +201,8 @@ async function reloadApps() {
     }
   } catch (e) {
     console.error("Failed to reload apps:", e);
+    adminState.appsCatalogAvailable = false;
+    if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
   }
 }
 

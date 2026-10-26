@@ -39,6 +39,22 @@ func TestNPMScanReporting(t *testing.T) {
 	})}
 	DiscoverNPMApps(app)
 	assertSafeFailure(t, app.NPMDiscovery.GetScanSnapshot(), "upstream_auth")
+	for _, tc := range []struct{ name string; status int; body, code string }{
+		{"server error", 500, `{"error":"secret"}`, "bad_response"},
+		{"malformed token", 200, `{`, "decode_failed"},
+		{"empty token", 200, `{"token":""}`, "bad_response"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app.NPMTokenMu.Lock()
+			app.NPMToken = ""
+			app.NPMTokenMu.Unlock()
+			app.HTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return apiResponse(tc.status, tc.body), nil
+			})}
+			DiscoverNPMApps(app)
+			assertSafeFailure(t, app.NPMDiscovery.GetScanSnapshot(), tc.code)
+		})
+	}
 }
 
 func TestCaddyScanReporting(t *testing.T) {

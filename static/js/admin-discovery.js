@@ -10,10 +10,63 @@
             partial_read: 'Some configuration files could not be read', internal_error: 'Scan encountered an internal error'
         };
         const discoveryPolls = new Map();
+        let discoveryObserverTimer = null;
+        let discoveryObserverGeneration = 0;
 
         function discoveryCountHint(status) {
             if (status.scan?.state === 'failed') return `Last successful: ${status.scan.lastSuccessCount || 0} app(s)`;
             return `${status.appCount} app(s) discovered`;
+        }
+
+        function applyDiscoveryScanStatus(source, status) {
+            renderDiscoveryScanStatus(source, status?.scan);
+            const hint = document.getElementById(`${source}StatusHint`);
+            if (!hint) return;
+            hint.textContent = !status ? 'Status unavailable' : status.enabled ? discoveryCountHint(status) : 'Not enabled';
+            hint.style.color = status?.enabled ? 'var(--green)' : 'var(--text-muted)';
+        }
+
+        function stopDiscoveryScanObserver() {
+            discoveryObserverGeneration++;
+            clearTimeout(discoveryObserverTimer);
+            discoveryObserverTimer = null;
+            discoveryPolls.clear();
+        }
+
+        function startDiscoveryScanObserver() {
+            stopDiscoveryScanObserver();
+            const generation = discoveryObserverGeneration;
+            const visible = () => generation === discoveryObserverGeneration &&
+                document.getElementById('settingsModal')?.classList.contains('open') &&
+                document.querySelector('.settings-tab[data-tab="admin"]')?.classList.contains('active') &&
+                document.querySelector('.admin-subtab[data-admin-tab="discovery"]')?.classList.contains('active');
+            const observe = async () => {
+                if (!visible()) return;
+                let scanning = false;
+                let changed = false;
+                for (const source of discoverySources) {
+                    if (discoveryPolls.has(source)) continue;
+                    try {
+                        const response = await fetch(`/api/admin/${source}-discovery`, { credentials: 'include' });
+                        if (!response.ok) throw new Error('status unavailable');
+                        const status = await response.json();
+                        if (!visible()) return;
+                        if (discoveryPolls.has(source)) continue;
+                        if (!status.scan) throw new Error('scan unavailable');
+                        const previous = adminState.discoveryScanStatus?.[source];
+                        changed ||= !!status.scan.lastSuccessAt && status.scan.lastSuccessAt !== previous?.lastSuccessAt;
+                        scanning ||= status.scan.state === 'scanning';
+                        applyDiscoveryScanStatus(source, status);
+                    } catch (_) {
+                        if (!visible()) return;
+                        if (discoveryPolls.has(source)) continue;
+                        applyDiscoveryScanStatus(source, null);
+                    }
+                }
+                if (changed && visible()) await loadDiscoveredAppsData();
+                if (visible()) discoveryObserverTimer = setTimeout(observe, scanning ? 1500 : 15000);
+            };
+            discoveryObserverTimer = setTimeout(observe, 1500);
         }
 
         function renderDiscoveryScanStatus(source, scan) {
@@ -74,15 +127,16 @@
                 .filter(entry => entry.app.source === source).map(entry => ({ ...entry, kind, label })));
             const query = (document.getElementById(`discoveryScanSearch-${source}`)?.value || '').trim().toLowerCase();
             const filter = document.getElementById(`discoveryScanFilter-${source}`)?.value || 'all';
-            const visible = all.filter(entry => (filter === 'all' || entry.kind === filter) &&
+            const queryMatches = all.filter(entry =>
                 (!query || (entry.app.name || '').toLowerCase().includes(query) || (entry.app.url || '').toLowerCase().includes(query)));
+            const visible = queryMatches.filter(entry => filter === 'all' || entry.kind === filter);
             const counts = Object.entries(kinds).map(([kind, label]) => `${label}: ${all.filter(entry => entry.kind === kind).length}`).join(' · ');
             const scan = adminState.discoveryScanStatus?.[source];
             let empty = 'No routes found in the last successful scan';
             if (!scan || scan.state === 'disabled') empty = 'Source is disabled';
             else if (!scan.lastSuccessAt) empty = scan.state === 'failed' ? 'No successful scan yet' : 'Waiting for first scan';
-            if (query && visible.length === 0) empty = 'Not found in the latest successful scan';
-            else if (all.length && visible.length === 0) empty = 'No routes match the current filter';
+            if (scan?.lastSuccessAt && query && queryMatches.length === 0) empty = 'Not found in the latest successful scan';
+            else if (scan?.lastSuccessAt && all.length && visible.length === 0) empty = 'No routes match the current filter';
             container.innerHTML = `<p class="settings-desc">${all.length} current routes · ${counts}</p>
                 <p class="settings-desc">Showing ${visible.length} of ${all.length} routes${scan?.state === 'failed' ? ' from the last successful scan' : ''}</p>
                 ${visible.length ? visible.map(entry => `<div class="discovery-diagnostic-route"><strong>${escapeHtml(entry.app.name || entry.app.url)}</strong>
@@ -101,36 +155,54 @@
         });
 
         async function refreshDiscoveryScan(source) {
+            const token = Symbol(source);
+            discoveryPolls.set(source, token);
+            const active = () => discoveryPolls.get(source) === token &&
+                document.getElementById('settingsModal')?.classList.contains('open');
             const previous = adminState.discoveryScanStatus?.[source];
-            const response = await fetch(`/api/admin/${source}-discovery`, { method: 'POST', credentials: 'include' });
-            if (!response.ok) { showToast('Failed to refresh'); return; }
+            let response;
+            try { response = await fetch(`/api/admin/${source}-discovery`, { method: 'POST', credentials: 'include' }); }
+            catch (_) { if (active()) { showToast('Failed to refresh'); discoveryPolls.delete(source); } return; }
+            if (!active()) return;
+            if (!response.ok) { showToast('Failed to refresh'); discoveryPolls.delete(source); return; }
             showToast(`Refreshing ${source} discovery...`);
             const summary = document.getElementById(`discoveryScanSummary-${source}`);
             summary.textContent = 'Refresh requested · Waiting for a new scan';
-            const token = Symbol(source);
-            discoveryPolls.set(source, token);
             let sawAttempt = previous?.state === 'scanning';
+            let finished = false;
             for (let attempt = 0; attempt < 40; attempt++) {
-                if (discoveryPolls.get(source) !== token || !document.getElementById('settingsModal')?.classList.contains('open')) break;
+                if (!active()) break;
                 await new Promise(resolve => setTimeout(resolve, 750));
+                if (!active()) break;
                 try {
                     const poll = await fetch(`/api/admin/${source}-discovery`, { credentials: 'include' });
+                    if (!active()) break;
                     if (!poll.ok) throw new Error('status unavailable');
                     const status = await poll.json();
+                    if (!active()) break;
                     const scan = status.scan;
                     if (!scan) throw new Error('scan unavailable');
                     if (scan.startedAt && scan.startedAt !== previous?.startedAt) sawAttempt = true;
                     if (!sawAttempt) continue;
-                    renderDiscoveryScanStatus(source, scan);
+                    applyDiscoveryScanStatus(source, status);
                     if (scan.state !== 'scanning') {
                         await loadDiscoveredAppsData();
+                        if (!active()) break;
+                        finished = true;
                         break;
                     }
-                } catch (_) { summary.textContent = 'Unavailable · Could not read scan status'; }
+                } catch (_) {
+                    if (!active()) break;
+                    applyDiscoveryScanStatus(source, null);
+                    summary.textContent = 'Unavailable · Could not read scan status';
+                }
             }
             if (discoveryPolls.get(source) === token) {
+                if (active() && !finished) {
+                    applyDiscoveryScanStatus(source, null);
+                    summary.textContent = sawAttempt ? 'Unavailable · Scan result could not be confirmed' : 'No new scan started · Try refresh again';
+                }
                 discoveryPolls.delete(source);
-                if (!sawAttempt) summary.textContent = 'No new scan started · Try refresh again';
             }
         }
 

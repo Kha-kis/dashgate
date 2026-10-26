@@ -3,6 +3,7 @@ package discovery
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -22,6 +23,14 @@ import (
 // flexBool handles JSON fields that may be bool or number (0/1).
 // NPM API returns ssl_forced as a number in some versions.
 type flexBool bool
+
+type npmTokenError struct {
+	code string
+	err error
+}
+
+func (e *npmTokenError) Error() string { return e.err.Error() }
+func (e *npmTokenError) Unwrap() error { return e.err }
 
 func (fb *flexBool) UnmarshalJSON(data []byte) error {
 	var b bool
@@ -242,7 +251,11 @@ func npmRefreshTokenLocked(app *server.App) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("token request failed with status: %d", resp.StatusCode)
+		code := "bad_response"
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			code = "upstream_auth"
+		}
+		return &npmTokenError{code: code, err: fmt.Errorf("token request failed with status: %d", resp.StatusCode)}
 	}
 
 	var tokenResp struct {
@@ -250,11 +263,11 @@ func npmRefreshTokenLocked(app *server.App) error {
 		Expires string `json:"expires"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&tokenResp); err != nil {
-		return fmt.Errorf("failed to decode token response: %w", err)
+		return &npmTokenError{code: "decode_failed", err: fmt.Errorf("failed to decode token response: %w", err)}
 	}
 
 	if tokenResp.Token == "" {
-		return fmt.Errorf("NPM returned empty token")
+		return &npmTokenError{code: "bad_response", err: fmt.Errorf("NPM returned empty token")}
 	}
 
 	app.NPMToken = tokenResp.Token
@@ -299,8 +312,9 @@ func scanNPMApps(app *server.App) (server.DiscoveryScanResult, string) {
 	token, err := NPMGetToken(app)
 	if err != nil {
 		log.Printf("NPM discovery error (token): %v", err)
-		if strings.Contains(err.Error(), "status: 401") || strings.Contains(err.Error(), "status: 403") {
-			return server.DiscoveryScanResult{}, "upstream_auth"
+		var tokenErr *npmTokenError
+		if errors.As(err, &tokenErr) {
+			return server.DiscoveryScanResult{}, tokenErr.code
 		}
 		return server.DiscoveryScanResult{}, "unreachable"
 	}
