@@ -653,19 +653,9 @@
             const sourceFilter = adminState.discoveredSourceFilter || 'all';
 
             const allDiscovered = adminState.discoveredApps || [];
-            const ignored = adminState.ignoredDiscoveredApps || [];
-            const ignoredKeys = new Set(ignored.map(a => discoveredAppKey(a)));
-            const ruleKeys = new Set((adminState.discoveryRuleMatches || []).map(a => discoveredAppKey(a)));
-
-            // Manual dismissals and rules take precedence over the display-only Already added group.
-            const candidates = allDiscovered.filter(a => (!a.override || a.override.hidden) && !ignoredKeys.has(discoveredAppKey(a)) && !ruleKeys.has(discoveredAppKey(a)));
-            const alreadyAdded = [];
-            let apps = [];
-            for (const app of candidates) {
-                const publishedApp = !app.override && publishedAppForDiscoveredRoute(app);
-                if (publishedApp) alreadyAdded.push({ app, publishedApp });
-                else apps.push(app);
-            }
+            const partition = partitionDiscoveredRoutes(allDiscovered, adminState.ignoredDiscoveredApps || [], adminState.discoveryRuleMatches || [], adminState.apps || []);
+            const alreadyAdded = partition.alreadyAdded;
+            let apps = partition.inbox.map(entry => entry.app);
             const actionableKeys = new Set(apps.map(discoveredAppKey));
             for (const key of adminState.selectedDiscoveredApps) {
                 if (!actionableKeys.has(key)) adminState.selectedDiscoveredApps.delete(key);
@@ -787,7 +777,34 @@
             return JSON.stringify([app.source, app.url]);
         }
 
-        function publishedAppForDiscoveredRoute(route) {
+        // One current route receives exactly one Content/diagnostics disposition.
+        // Persisted ignored entries absent from active are intentionally omitted.
+        function partitionDiscoveredRoutes(active, ignored, ruleMatches, publishedApps) {
+            const partition = { inbox: [], alreadyAdded: [], ignored: [], ruleMatched: [], configured: [] };
+            const ignoredKeys = new Set(ignored.map(discoveredAppKey));
+            const rulesByKey = new Map(ruleMatches.map(match => [discoveredAppKey(match), match]));
+            const seen = new Set();
+            for (const app of active) {
+                const key = discoveredAppKey(app);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                if (ignoredKeys.has(key)) {
+                    partition.ignored.push({ app, reason: 'Dismissed from the inbox' });
+                } else if (rulesByKey.has(key)) {
+                    const rule = rulesByKey.get(key);
+                    partition.ruleMatched.push({ app, rule, reason: `Matches ignore rule #${rule.ruleId}` });
+                } else if (app.override && !app.override.hidden) {
+                    partition.configured.push({ app, reason: `Configured as ${app.override.nameOverride || app.name}` });
+                } else {
+                    const publishedApp = !app.override && publishedAppForDiscoveredRoute(app, publishedApps, active);
+                    if (publishedApp) partition.alreadyAdded.push({ app, publishedApp, reason: `Already on dashboard as ${publishedApp.name}` });
+                    else partition.inbox.push({ app, reason: app.override?.hidden ? 'Hidden override; available in Content inbox' : 'Available in Content inbox' });
+                }
+            }
+            return partition;
+        }
+
+        function publishedAppForDiscoveredRoute(route, publishedApps = adminState.apps || [], active = adminState.discoveredApps || []) {
             const canonicalURL = value => {
                 try {
                     const parsed = new URL(value);
@@ -799,15 +816,15 @@
             const routeURL = canonicalURL(route.url);
             if (!routeURL) return null;
 
-            for (const app of adminState.apps || []) {
+            for (const app of publishedApps) {
                 if (app.source === 'config' && canonicalURL(app.url) === routeURL) {
                     return { name: app.name, url: app.url };
                 }
             }
             // The dashboard omits a discovered app when its original URL exactly
             // duplicates a manual app, even if its override points elsewhere.
-            const configURLs = new Set((adminState.apps || []).filter(app => app.source === 'config').map(app => app.url));
-            for (const app of adminState.discoveredApps || []) {
+            const configURLs = new Set(publishedApps.filter(app => app.source === 'config').map(app => app.url));
+            for (const app of active) {
                 if (configURLs.has(app.url)) continue;
                 const override = app.override;
                 if (override && !override.hidden && canonicalURL(override.urlOverride || app.url) === routeURL) {

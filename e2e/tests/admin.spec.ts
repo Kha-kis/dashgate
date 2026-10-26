@@ -8,6 +8,34 @@ test.describe("Admin Panel", () => {
     await login(page);
   });
 
+  test("discovery disposition assigns only current source routes", async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const active = [
+        { name: 'Inbox', url: 'https://one.example', source: 'docker' },
+        { name: 'Same URL', url: 'https://one.example', source: 'nginx' },
+        { name: 'Hidden', url: 'https://hidden.example', source: 'nginx', override: { hidden: true } },
+        { name: 'Published', url: 'https://published.example', source: 'docker' },
+        { name: 'Configured', url: 'https://configured.example', source: 'docker', override: { nameOverride: 'Custom' } },
+        { name: 'Ignored', url: 'https://ignored.example', source: 'nginx' },
+        { name: 'Rule', url: 'https://rule.example', source: 'nginx' },
+      ];
+      const partition = (window as any).partitionDiscoveredRoutes(
+        active,
+        [{ source: 'nginx', url: 'https://ignored.example' }, { source: 'nginx', url: 'https://stale.example' }],
+        [{ source: 'nginx', url: 'https://rule.example', ruleId: 7 }],
+        [{ source: 'config', name: 'Published app', url: 'https://published.example' }],
+      );
+      return Object.fromEntries(Object.entries(partition).map(([kind, entries]) => [kind, (entries as any[]).map(entry => entry.app.name)]));
+    });
+    expect(result).toEqual({
+      inbox: ['Inbox', 'Same URL', 'Hidden'],
+      alreadyAdded: ['Published'],
+      ignored: ['Ignored'],
+      ruleMatched: ['Rule'],
+      configured: ['Configured'],
+    });
+  });
+
   test("admin tab visible for admin users", async ({ page }) => {
     await page.locator(".dock-item").nth(4).click();
     await expect(page.locator("#settingsModal")).toBeVisible();
