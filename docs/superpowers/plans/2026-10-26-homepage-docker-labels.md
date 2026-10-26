@@ -18,4 +18,4 @@
 - [x] Explain supported labels in README and Admin → Discovery.
 - [x] Format Go code and run focused and full tests.
 - [x] Review the change for code, security, and usability regressions; address findings.
-- [ ] Create a PR and verify CI.
+- [x] Create a PR and verify CI.
