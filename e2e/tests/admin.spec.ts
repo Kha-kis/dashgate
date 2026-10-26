@@ -230,6 +230,133 @@ test.describe("Admin Panel", () => {
     await expect(page.locator('#dockerStatusHint')).toContainText('2 app(s) discovered');
   });
 
+  test("disabling a source clears its visible diagnostic routes", async ({ page }) => {
+    let enabled = true;
+    let routeReads = 0;
+    await page.route('**/api/admin/docker-discovery', route => route.fulfill({ json: {
+      enabled, appCount: enabled ? 1 : 0, envOverride: false,
+      scan: { state: enabled ? 'completed' : 'disabled',
+        startedAt: enabled ? '2026-10-26T12:00:00Z' : null,
+        lastSuccessAt: enabled ? '2026-10-26T12:00:00Z' : null,
+        lastSuccessCount: enabled ? 1 : 0 },
+    } }));
+    await page.route('**/api/admin/discovered-apps', route => {
+      routeReads++;
+      return route.fulfill({ json: { active: enabled ? [
+        { name: 'Old route', url: 'https://old.example', source: 'docker' },
+      ] : [], stale: [], ignored: [], ruleMatches: [], ignoreRules: [] } });
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="discovery"]').click();
+    await expect(page.locator('#discoveryScanRoutes-docker')).toContainText('Old route');
+    const before = routeReads;
+    enabled = false;
+    await expect(page.locator('#discoveryScanSummary-docker')).toContainText('Disabled', { timeout: 20000 });
+    await expect(page.locator('#discoveryScanRoutes-docker')).toContainText('Source is disabled');
+    await expect(page.locator('#discoveryScanRoutes-docker')).not.toContainText('Old route');
+    await expect.poll(() => routeReads).toBeGreaterThan(before);
+  });
+
+  test("a delayed observer response cannot overwrite a finished refresh", async ({ page }) => {
+    let posted = false;
+    let holdNextGet = false;
+    let releaseOld!: () => void;
+    let markStarted!: () => void;
+    const held = new Promise<void>(resolve => { releaseOld = resolve; });
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    const status = (count: number) => ({ enabled: true, appCount: count, envOverride: false,
+      scan: { state: 'completed', startedAt: `2026-10-26T1${count}:00:00Z`,
+        lastSuccessAt: `2026-10-26T1${count}:00:00Z`, lastSuccessCount: count } });
+    await page.route('**/api/admin/docker-discovery', async route => {
+      if (route.request().method() === 'POST') { posted = true; return route.fulfill({ json: {} }); }
+      if (holdNextGet) {
+        holdNextGet = false;
+        markStarted();
+        await held;
+        return route.fulfill({ json: status(1) });
+      }
+      return route.fulfill({ json: status(posted ? 3 : 1) });
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="discovery"]').click();
+    await page.evaluate(() => (window as any).loadAdminData());
+    await expect(page.locator('#discoveryScanSummary-docker')).toContainText('1 routes');
+    holdNextGet = true;
+    await page.evaluate(() => (window as any).startDiscoveryScanObserver());
+    await started;
+    await page.locator('#dockerRefreshBtn').click();
+    await expect(page.locator('#discoveryScanSummary-docker')).toContainText('3 routes', { timeout: 6000 });
+    releaseOld();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#discoveryScanSummary-docker')).toContainText('3 routes');
+  });
+
+  test("a delayed status loader cannot overwrite a finished refresh", async ({ page }) => {
+    let posted = false;
+    let holdNextGet = false;
+    let releaseOld!: () => void;
+    let markStarted!: () => void;
+    const held = new Promise<void>(resolve => { releaseOld = resolve; });
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    const status = (count: number) => ({ enabled: true, appCount: count, envOverride: false,
+      scan: { state: 'completed', startedAt: `2026-10-26T1${count}:00:00Z`,
+        lastSuccessAt: `2026-10-26T1${count}:00:00Z`, lastSuccessCount: count } });
+    await page.route('**/api/admin/docker-discovery', async route => {
+      if (route.request().method() === 'POST') { posted = true; return route.fulfill({ json: {} }); }
+      if (holdNextGet) {
+        holdNextGet = false;
+        markStarted();
+        await held;
+        return route.fulfill({ json: status(1) });
+      }
+      return route.fulfill({ json: status(posted ? 3 : 1) });
+    });
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="discovery"]').click();
+    await page.evaluate(() => (window as any).loadAdminData());
+    await page.evaluate(() => (window as any).stopDiscoveryScanObserver());
+    holdNextGet = true;
+    await page.evaluate(() => { void (window as any).loadDockerDiscoveryStatus(); });
+    await started;
+    await page.locator('#dockerRefreshBtn').click();
+    await expect(page.locator('#discoveryScanSummary-docker')).toContainText('3 routes', { timeout: 6000 });
+    releaseOld();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#discoveryScanSummary-docker')).toContainText('3 routes');
+  });
+
+  test("scanning without a successful snapshot has no current route count", async ({ page }) => {
+    await page.route('**/api/admin/docker-discovery', route => route.fulfill({ json: { enabled: true, appCount: 0, envOverride: false,
+      scan: { state: 'scanning', startedAt: '2026-10-26T12:00:00Z', lastSuccessAt: null, lastSuccessCount: 0 } } }));
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="discovery"]').click();
+    await expect(page.locator('#discoveryScanSummary-docker')).toContainText('Scanning');
+    await expect(page.locator('#discoveryScanSummary-docker')).not.toContainText('0 routes');
+    await expect(page.locator('#dockerStatusHint')).toContainText('Scanning');
+  });
+
+  test("unchanged scan status does not replace its live region", async ({ page }) => {
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="discovery"]').click();
+    await page.evaluate(() => (window as any).loadAdminData());
+    const sameNode = await page.evaluate(async () => {
+      const summary = document.getElementById('discoveryScanSummary-docker')!;
+      const original = summary.firstChild;
+      await (window as any).loadDockerDiscoveryStatus();
+      return original === summary.firstChild;
+    });
+    expect(sameNode).toBe(true);
+  });
+
   test("admin tab visible for admin users", async ({ page }) => {
     await page.locator(".dock-item").nth(4).click();
     await expect(page.locator("#settingsModal")).toBeVisible();

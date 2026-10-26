@@ -10,11 +10,26 @@
             partial_read: 'Some configuration files could not be read', internal_error: 'Scan encountered an internal error'
         };
         const discoveryPolls = new Map();
+        const discoveryReadVersions = new Map();
+        const discoveryRenderedSignatures = new Map();
         let discoveryObserverTimer = null;
         let discoveryObserverGeneration = 0;
 
+        function beginDiscoveryStatusRead(source) {
+            if (discoveryPolls.has(source)) return null;
+            const version = (discoveryReadVersions.get(source) || 0) + 1;
+            discoveryReadVersions.set(source, version);
+            return version;
+        }
+
+        function currentDiscoveryStatusRead(source, version) {
+            return version !== null && discoveryReadVersions.get(source) === version && !discoveryPolls.has(source);
+        }
+
         function discoveryCountHint(status) {
             if (status.scan?.state === 'failed') return `Last successful: ${status.scan.lastSuccessCount || 0} app(s)`;
+            if (status.scan?.state === 'scanning') return status.scan.lastSuccessAt
+                ? `Last successful: ${status.scan.lastSuccessCount || 0} app(s)` : 'Scanning';
             return `${status.appCount} app(s) discovered`;
         }
 
@@ -45,21 +60,25 @@
                 let scanning = false;
                 let changed = false;
                 for (const source of discoverySources) {
-                    if (discoveryPolls.has(source)) continue;
+                    const version = beginDiscoveryStatusRead(source);
+                    if (version === null) continue;
                     try {
                         const response = await fetch(`/api/admin/${source}-discovery`, { credentials: 'include' });
                         if (!response.ok) throw new Error('status unavailable');
                         const status = await response.json();
                         if (!visible()) return;
-                        if (discoveryPolls.has(source)) continue;
+                        if (!currentDiscoveryStatusRead(source, version)) continue;
                         if (!status.scan) throw new Error('scan unavailable');
                         const previous = adminState.discoveryScanStatus?.[source];
-                        changed ||= !!status.scan.lastSuccessAt && status.scan.lastSuccessAt !== previous?.lastSuccessAt;
+                        changed ||= status.scan.lastSuccessAt !== previous?.lastSuccessAt &&
+                            !!(status.scan.lastSuccessAt || previous?.lastSuccessAt);
+                        changed ||= previous?.state !== status.scan.state &&
+                            (status.scan.state === 'disabled' || status.scan.state === 'waiting');
                         scanning ||= status.scan.state === 'scanning';
                         applyDiscoveryScanStatus(source, status);
                     } catch (_) {
                         if (!visible()) return;
-                        if (discoveryPolls.has(source)) continue;
+                        if (!currentDiscoveryStatusRead(source, version)) continue;
                         applyDiscoveryScanStatus(source, null);
                     }
                 }
@@ -75,26 +94,36 @@
             if (!scan || !discoverySources.includes(source)) {
                 adminState.discoveryScanStatus ||= {};
                 adminState.discoveryScanStatus[source] = null;
-                container.textContent = 'Unavailable · Scan status could not be loaded';
+                if (discoveryRenderedSignatures.get(source) !== 'unavailable') {
+                    container.textContent = 'Unavailable · Scan status could not be loaded';
+                    discoveryRenderedSignatures.set(source, 'unavailable');
+                }
                 renderDiscoveryScanDetails(source);
                 return;
             }
             adminState.discoveryScanStatus ||= {};
             adminState.discoveryScanStatus[source] = scan;
+            const signature = JSON.stringify(scan);
+            if (discoveryRenderedSignatures.get(source) === signature) {
+                renderDiscoveryScanDetails(source);
+                return;
+            }
+            discoveryRenderedSignatures.set(source, signature);
             const states = {
                 disabled: 'Disabled', waiting: 'Waiting for first scan', scanning: 'Scanning',
                 completed: 'Completed', warning: 'Completed with warnings', failed: 'Failed'
             };
             const label = states[scan.state] || 'Unavailable';
             const count = Number.isFinite(scan.lastSuccessCount) ? scan.lastSuccessCount : 0;
-            const countText = scan.state === 'failed' || scan.state === 'warning'
+            const countText = scan.state === 'failed' || scan.state === 'warning' || scan.state === 'scanning'
                 ? `Last successful: ${count} routes` : `${count} routes`;
             const format = value => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleString() : 'Never';
             container.replaceChildren();
             const title = document.createElement('strong');
             title.textContent = label;
             container.append(title);
-            if (scan.state !== 'disabled' && scan.state !== 'waiting') {
+            if (scan.state !== 'disabled' && scan.state !== 'waiting' &&
+                (scan.state !== 'scanning' || scan.lastSuccessAt)) {
                 container.append(document.createTextNode(` · ${countText}`));
             }
             if (scan.issueCode && discoveryIssueCopy[scan.issueCode]) {
@@ -121,6 +150,15 @@
                 container.textContent = 'Unavailable · Route data could not be loaded';
                 return;
             }
+            const scan = adminState.discoveryScanStatus[source];
+            if (scan.state === 'disabled') {
+                container.textContent = 'Source is disabled';
+                return;
+            }
+            if (!scan.lastSuccessAt) {
+                container.textContent = scan.state === 'failed' ? 'No successful scan yet' : 'Waiting for first scan';
+                return;
+            }
             const partition = partitionDiscoveredRoutes(adminState.discoveredApps || [], adminState.ignoredDiscoveredApps || [], adminState.discoveryRuleMatches || [], adminState.apps || []);
             const kinds = { inbox: 'Inbox', alreadyAdded: 'Already added', ignored: 'Ignored', ruleMatched: 'Rule matched', configured: 'Configured' };
             const all = Object.entries(kinds).flatMap(([kind, label]) => partition[kind]
@@ -131,7 +169,6 @@
                 (!query || (entry.app.name || '').toLowerCase().includes(query) || (entry.app.url || '').toLowerCase().includes(query)));
             const visible = queryMatches.filter(entry => filter === 'all' || entry.kind === filter);
             const counts = Object.entries(kinds).map(([kind, label]) => `${label}: ${all.filter(entry => entry.kind === kind).length}`).join(' · ');
-            const scan = adminState.discoveryScanStatus?.[source];
             let empty = 'No routes found in the last successful scan';
             if (!scan || scan.state === 'disabled') empty = 'Source is disabled';
             else if (!scan.lastSuccessAt) empty = scan.state === 'failed' ? 'No successful scan yet' : 'Waiting for first scan';
@@ -157,6 +194,7 @@
         async function refreshDiscoveryScan(source) {
             const token = Symbol(source);
             discoveryPolls.set(source, token);
+            discoveryReadVersions.set(source, (discoveryReadVersions.get(source) || 0) + 1);
             const active = () => discoveryPolls.get(source) === token &&
                 document.getElementById('settingsModal')?.classList.contains('open');
             const previous = adminState.discoveryScanStatus?.[source];
@@ -168,6 +206,7 @@
             showToast(`Refreshing ${source} discovery...`);
             const summary = document.getElementById(`discoveryScanSummary-${source}`);
             summary.textContent = 'Refresh requested · Waiting for a new scan';
+            discoveryRenderedSignatures.delete(source);
             let sawAttempt = previous?.state === 'scanning';
             let finished = false;
             for (let attempt = 0; attempt < 40; attempt++) {
@@ -258,11 +297,14 @@
 
         // Docker Discovery
         async function loadDockerDiscoveryStatus() {
+            const version = beginDiscoveryStatusRead('docker');
+            if (version === null) return;
             try {
                 const resp = await fetch('/api/admin/docker-discovery', { credentials: 'include' });
                 if (!resp.ok) throw new Error('Docker scan status unavailable');
                 if (resp.ok) {
                     const status = await resp.json();
+                    if (!currentDiscoveryStatusRead('docker', version)) return;
                     renderDiscoveryScanStatus('docker', status.scan);
                     const hint = document.getElementById('dockerStatusHint');
                     const refreshBtn = document.getElementById('dockerRefreshBtn');
@@ -296,7 +338,7 @@
                 }
             } catch (e) {
                 console.error('Failed to load Docker discovery status:', e);
-                renderDiscoveryScanStatus('docker', null);
+                if (currentDiscoveryStatusRead('docker', version)) renderDiscoveryScanStatus('docker', null);
             }
         }
 
@@ -306,11 +348,14 @@
 
         // Traefik Discovery
         async function loadTraefikDiscoveryStatus() {
+            const version = beginDiscoveryStatusRead('traefik');
+            if (version === null) return;
             try {
                 const resp = await fetch('/api/admin/traefik-discovery', { credentials: 'include' });
                 if (!resp.ok) throw new Error('Traefik scan status unavailable');
                 if (resp.ok) {
                     const status = await resp.json();
+                    if (!currentDiscoveryStatusRead('traefik', version)) return;
                     renderDiscoveryScanStatus('traefik', status.scan);
                     const hint = document.getElementById('traefikStatusHint');
                     const refreshBtn = document.getElementById('traefikRefreshBtn');
@@ -346,7 +391,7 @@
                 }
             } catch (e) {
                 console.error('Failed to load Traefik discovery status:', e);
-                renderDiscoveryScanStatus('traefik', null);
+                if (currentDiscoveryStatusRead('traefik', version)) renderDiscoveryScanStatus('traefik', null);
             }
         }
 
@@ -389,11 +434,14 @@
 
         // Nginx Config Discovery
         async function loadNginxDiscoveryStatus() {
+            const version = beginDiscoveryStatusRead('nginx');
+            if (version === null) return;
             try {
                 const resp = await fetch('/api/admin/nginx-discovery', { credentials: 'include' });
                 if (!resp.ok) throw new Error('Nginx scan status unavailable');
                 if (resp.ok) {
                     const status = await resp.json();
+                    if (!currentDiscoveryStatusRead('nginx', version)) return;
                     renderDiscoveryScanStatus('nginx', status.scan);
                     const hint = document.getElementById('nginxStatusHint');
                     const refreshBtn = document.getElementById('nginxRefreshBtn');
@@ -427,7 +475,7 @@
                 }
             } catch (e) {
                 console.error('Failed to load Nginx discovery status:', e);
-                renderDiscoveryScanStatus('nginx', null);
+                if (currentDiscoveryStatusRead('nginx', version)) renderDiscoveryScanStatus('nginx', null);
             }
         }
 
@@ -437,11 +485,14 @@
 
         // NPM Discovery
         async function loadNPMDiscoveryStatus() {
+            const version = beginDiscoveryStatusRead('npm');
+            if (version === null) return;
             try {
                 const resp = await fetch('/api/admin/npm-discovery', { credentials: 'include' });
                 if (!resp.ok) throw new Error('NPM scan status unavailable');
                 if (resp.ok) {
                     const status = await resp.json();
+                    if (!currentDiscoveryStatusRead('npm', version)) return;
                     renderDiscoveryScanStatus('npm', status.scan);
                     const hint = document.getElementById('npmStatusHint');
                     const refreshBtn = document.getElementById('npmRefreshBtn');
@@ -477,7 +528,7 @@
                 }
             } catch (e) {
                 console.error('Failed to load NPM discovery status:', e);
-                renderDiscoveryScanStatus('npm', null);
+                if (currentDiscoveryStatusRead('npm', version)) renderDiscoveryScanStatus('npm', null);
             }
         }
 
@@ -521,11 +572,14 @@
 
         // Caddy Discovery
         async function loadCaddyDiscoveryStatus() {
+            const version = beginDiscoveryStatusRead('caddy');
+            if (version === null) return;
             try {
                 const resp = await fetch('/api/admin/caddy-discovery', { credentials: 'include' });
                 if (!resp.ok) throw new Error('Caddy scan status unavailable');
                 if (resp.ok) {
                     const status = await resp.json();
+                    if (!currentDiscoveryStatusRead('caddy', version)) return;
                     renderDiscoveryScanStatus('caddy', status.scan);
                     const hint = document.getElementById('caddyStatusHint');
                     const refreshBtn = document.getElementById('caddyRefreshBtn');
@@ -561,7 +615,7 @@
                 }
             } catch (e) {
                 console.error('Failed to load Caddy discovery status:', e);
-                renderDiscoveryScanStatus('caddy', null);
+                if (currentDiscoveryStatusRead('caddy', version)) renderDiscoveryScanStatus('caddy', null);
             }
         }
 
@@ -604,11 +658,14 @@
 
         // Unraid Discovery
         async function loadUnraidDiscoveryStatus() {
+            const version = beginDiscoveryStatusRead('unraid');
+            if (version === null) return;
             try {
                 const resp = await fetch('/api/admin/unraid-discovery', { credentials: 'include' });
                 if (!resp.ok) throw new Error('Unraid scan status unavailable');
                 if (resp.ok) {
                     const status = await resp.json();
+                    if (!currentDiscoveryStatusRead('unraid', version)) return;
                     renderDiscoveryScanStatus('unraid', status.scan);
                     const hint = document.getElementById('unraidStatusHint');
                     const refreshBtn = document.getElementById('unraidRefreshBtn');
@@ -642,7 +699,7 @@
                 }
             } catch (e) {
                 console.error('Failed to load Unraid discovery status:', e);
-                renderDiscoveryScanStatus('unraid', null);
+                if (currentDiscoveryStatusRead('unraid', version)) renderDiscoveryScanStatus('unraid', null);
             }
         }
 
