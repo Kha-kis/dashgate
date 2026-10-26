@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"dashgate/internal/database"
 	"dashgate/internal/discovery"
@@ -14,6 +15,25 @@ import (
 	"dashgate/internal/server"
 	"dashgate/internal/urlvalidation"
 )
+
+func discoveryScanStatus(dm *server.DiscoveryManager) map[string]any {
+	scan := dm.GetScanSnapshot()
+	formatTime := func(value time.Time) any {
+		if value.IsZero() {
+			return nil
+		}
+		return value.UTC().Format(time.RFC3339Nano)
+	}
+	return map[string]any{
+		"state":            scan.State,
+		"startedAt":        formatTime(scan.StartedAt),
+		"completedAt":      formatTime(scan.CompletedAt),
+		"lastSuccessAt":    formatTime(scan.LastSuccessAt),
+		"lastSuccessCount": scan.LastSuccessCount,
+		"warningCount":     scan.WarningCount,
+		"issueCode":        scan.IssueCode,
+	}
+}
 
 // DockerDiscoveryHandler manages Docker container discovery settings.
 func DockerDiscoveryHandler(app *server.App) http.HandlerFunc {
@@ -32,6 +52,7 @@ func DockerDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"enabled":     enabled,
 				"socketPath":  socketPath,
 				"appCount":    len(app.DockerDiscovery.GetApps()),
+				"scan":        discoveryScanStatus(app.DockerDiscovery),
 				"envOverride": app.DockerDiscoveryEnvOverride,
 			}
 			respondJSON(w, http.StatusOK, status)
@@ -115,6 +136,7 @@ func TraefikDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"username":    traefikUsername,
 				"hasPassword": hasPassword,
 				"appCount":    len(app.TraefikDiscovery.GetApps()),
+				"scan":        discoveryScanStatus(app.TraefikDiscovery),
 				"envOverride": app.TraefikDiscoveryEnvOverride,
 			}
 			respondJSON(w, http.StatusOK, status)
@@ -204,6 +226,7 @@ func NginxDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"enabled":     enabled,
 				"configPath":  configPath,
 				"appCount":    len(app.NginxDiscovery.GetApps()),
+				"scan":        discoveryScanStatus(app.NginxDiscovery),
 				"envOverride": app.NginxDiscoveryEnvOverride,
 			}
 			respondJSON(w, http.StatusOK, status)
@@ -287,6 +310,7 @@ func NPMDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"url":         npmURL,
 				"email":       npmEmail,
 				"appCount":    len(app.NPMDiscovery.GetApps()),
+				"scan":        discoveryScanStatus(app.NPMDiscovery),
 				"envOverride": app.NPMDiscoveryEnvOverride,
 			}
 			respondJSON(w, http.StatusOK, status)
@@ -377,6 +401,7 @@ func CaddyDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"username":    caddyUsername,
 				"hasPassword": hasPassword,
 				"appCount":    len(app.CaddyDiscovery.GetApps()),
+				"scan":        discoveryScanStatus(app.CaddyDiscovery),
 				"envOverride": app.CaddyDiscoveryEnvOverride,
 			}
 			respondJSON(w, http.StatusOK, status)
@@ -713,6 +738,7 @@ func UnraidDiscoveryHandler(app *server.App) http.HandlerFunc {
 				"url":         unraidURL,
 				"hasApiKey":   hasAPIKey,
 				"appCount":    len(app.UnraidDiscovery.GetApps()),
+				"scan":        discoveryScanStatus(app.UnraidDiscovery),
 				"envOverride": app.UnraidDiscoveryEnvOverride,
 			}
 			respondJSON(w, http.StatusOK, status)
