@@ -48,7 +48,9 @@ func StartDockerDiscoveryLoop(app *server.App) {
 	}
 
 	app.DockerDiscovery.Enabled = true
+	app.DockerDiscovery.EnableScan()
 	app.DockerDiscovery.Stop = make(chan struct{})
+	stop := app.DockerDiscovery.Stop
 
 	app.DockerDiscovery.Wg.Add(1)
 	go func() {
@@ -63,7 +65,7 @@ func StartDockerDiscoveryLoop(app *server.App) {
 		DiscoverDockerApps(app) // Initial discovery
 		for {
 			select {
-			case <-app.DockerDiscovery.Stop:
+			case <-stop:
 				return
 			case <-ticker.C:
 				DiscoverDockerApps(app)
@@ -77,16 +79,17 @@ func StartDockerDiscoveryLoop(app *server.App) {
 func StopDockerDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	if app.DockerDiscovery.Stop != nil {
+		app.DockerDiscovery.DisableScan()
 		close(app.DockerDiscovery.Stop)
-		app.DockerDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
 
 	app.DockerDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
+	app.DockerDiscovery.Stop = nil
 	app.DockerDiscovery.Enabled = false
-	app.DockerDiscovery.ClearApps()
+	app.DockerDiscovery.DisableScan()
 	app.DiscoveryMu.Unlock()
 }
 
@@ -99,6 +102,12 @@ func DiscoverDockerApps(app *server.App) {
 	if !enabled {
 		return
 	}
+	app.DockerDiscovery.RunScan(func() (server.DiscoveryScanResult, string) {
+		return scanDockerApps(app)
+	})
+}
+
+func scanDockerApps(app *server.App) (server.DiscoveryScanResult, string) {
 
 	app.SysConfigMu.RLock()
 	socketPath := app.SystemConfig.DockerSocketPath
@@ -120,18 +129,18 @@ func DiscoverDockerApps(app *server.App) {
 		}
 		if err := urlvalidation.ValidateDiscoveryURL(apiURL); err != nil {
 			log.Printf("Docker discovery SSRF protection: %v", err)
-			return
+			return server.DiscoveryScanResult{}, "invalid_config"
 		}
 		client = &http.Client{Timeout: 10 * time.Second}
 	} else if strings.HasPrefix(socketPath, "npipe://") {
 		// Windows named pipe - not supported in this build
 		log.Printf("Docker discovery: Windows named pipes (npipe://) are not supported. Please use tcp://localhost:2375 instead (enable in Docker Desktop settings).")
-		return
+		return server.DiscoveryScanResult{}, "invalid_config"
 	} else {
 		// Use Unix socket (Linux/macOS)
-		if _, err := os.Stat(socketPath); os.IsNotExist(err) {
-			log.Printf("Docker socket not found at %s", socketPath)
-			return
+		if _, err := os.Stat(socketPath); err != nil {
+			log.Printf("Docker socket unavailable at %s: %v", socketPath, err)
+			return server.DiscoveryScanResult{}, "missing_config"
 		}
 		client = &http.Client{
 			Transport: &http.Transport{
@@ -147,19 +156,22 @@ func DiscoverDockerApps(app *server.App) {
 	resp, err := client.Get(apiURL + "/containers/json?all=true")
 	if err != nil {
 		log.Printf("Docker discovery error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "unreachable"
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Docker discovery error: API returned status %d", resp.StatusCode)
-		return
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return server.DiscoveryScanResult{}, "upstream_auth"
+		}
+		return server.DiscoveryScanResult{}, "bad_response"
 	}
 
 	var containers []models.DockerContainer
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&containers); err != nil { // 10MB limit
 		log.Printf("Docker container decode error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "decode_failed"
 	}
 
 	var apps []models.App
@@ -217,11 +229,10 @@ func DiscoverDockerApps(app *server.App) {
 		apps = append(apps, a)
 	}
 
-	app.DockerDiscovery.SetApps(apps)
-
 	if len(apps) == 0 && len(containers) > 0 {
 		log.Printf("Docker discovery: found %d containers, 0 with dashgate.enable=true label", len(containers))
 	} else {
 		log.Printf("Docker discovery: found %d apps (from %d containers)", len(apps), len(containers))
 	}
+	return server.DiscoveryScanResult{Apps: apps}, ""
 }
