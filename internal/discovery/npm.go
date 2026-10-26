@@ -3,6 +3,7 @@ package discovery
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -22,6 +23,14 @@ import (
 // flexBool handles JSON fields that may be bool or number (0/1).
 // NPM API returns ssl_forced as a number in some versions.
 type flexBool bool
+
+type npmTokenError struct {
+	code string
+	err error
+}
+
+func (e *npmTokenError) Error() string { return e.err.Error() }
+func (e *npmTokenError) Unwrap() error { return e.err }
 
 func (fb *flexBool) UnmarshalJSON(data []byte) error {
 	var b bool
@@ -80,12 +89,14 @@ func StartNPMDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.NPMDiscovery.Stop != nil {
+	if app.NPMDiscovery.Stop != nil || app.NPMDiscovery.StopClosing {
 		return // Already running
 	}
 
 	app.NPMDiscovery.Enabled = true
+	app.NPMDiscovery.EnableScan()
 	app.NPMDiscovery.Stop = make(chan struct{})
+	stop := app.NPMDiscovery.Stop
 
 	app.NPMDiscovery.Wg.Add(1)
 	go func() {
@@ -100,7 +111,7 @@ func StartNPMDiscoveryLoop(app *server.App) {
 		DiscoverNPMApps(app) // Initial discovery
 		for {
 			select {
-			case <-app.NPMDiscovery.Stop:
+			case <-stop:
 				return
 			case <-ticker.C:
 				DiscoverNPMApps(app)
@@ -113,17 +124,22 @@ func StartNPMDiscoveryLoop(app *server.App) {
 // clears all discovered apps, and resets the NPM token.
 func StopNPMDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.NPMDiscovery.Stop != nil {
+	if app.NPMDiscovery.Stop != nil && !app.NPMDiscovery.StopClosing {
+		app.NPMDiscovery.StopClosing = true
+		app.NPMDiscovery.DisableScan()
 		close(app.NPMDiscovery.Stop)
-		app.NPMDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
 
 	app.NPMDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.NPMDiscovery.Enabled = false
-	app.NPMDiscovery.ClearApps()
+	if app.NPMDiscovery.StopClosing {
+		app.NPMDiscovery.Stop = nil
+		app.NPMDiscovery.Enabled = false
+		app.NPMDiscovery.DisableScan()
+		app.NPMDiscovery.StopClosing = false
+	}
 	// Also clear the token
 	app.NPMTokenMu.Lock()
 	app.NPMToken = ""
@@ -235,7 +251,11 @@ func npmRefreshTokenLocked(app *server.App) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("token request failed with status: %d", resp.StatusCode)
+		code := "bad_response"
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			code = "upstream_auth"
+		}
+		return &npmTokenError{code: code, err: fmt.Errorf("token request failed with status: %d", resp.StatusCode)}
 	}
 
 	var tokenResp struct {
@@ -243,11 +263,11 @@ func npmRefreshTokenLocked(app *server.App) error {
 		Expires string `json:"expires"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&tokenResp); err != nil {
-		return fmt.Errorf("failed to decode token response: %w", err)
+		return &npmTokenError{code: "decode_failed", err: fmt.Errorf("failed to decode token response: %w", err)}
 	}
 
 	if tokenResp.Token == "" {
-		return fmt.Errorf("NPM returned empty token")
+		return &npmTokenError{code: "bad_response", err: fmt.Errorf("NPM returned empty token")}
 	}
 
 	app.NPMToken = tokenResp.Token
@@ -269,43 +289,56 @@ func DiscoverNPMApps(app *server.App) {
 	if !enabled {
 		return
 	}
+	app.NPMDiscovery.RunScan(func() (server.DiscoveryScanResult, string) { return scanNPMApps(app) })
+}
+
+func scanNPMApps(app *server.App) (server.DiscoveryScanResult, string) {
 
 	app.SysConfigMu.RLock()
 	npmURL := app.SystemConfig.NPMUrl
+	npmEmail := app.SystemConfig.NPMEmail
+	npmPassword := app.SystemConfig.NPMPassword
 	app.SysConfigMu.RUnlock()
 
-	if npmURL == "" {
-		return
+	if npmURL == "" || npmEmail == "" || npmPassword == "" {
+		return server.DiscoveryScanResult{}, "missing_config"
 	}
 
 	if err := urlvalidation.ValidateDiscoveryURL(npmURL); err != nil {
 		log.Printf("NPM discovery SSRF protection: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "invalid_config"
 	}
 
 	token, err := NPMGetToken(app)
 	if err != nil {
 		log.Printf("NPM discovery error (token): %v", err)
-		return
+		var tokenErr *npmTokenError
+		if errors.As(err, &tokenErr) {
+			return server.DiscoveryScanResult{}, tokenErr.code
+		}
+		return server.DiscoveryScanResult{}, "unreachable"
 	}
 
 	req, err := http.NewRequest("GET", npmURL+"/api/nginx/proxy-hosts", nil)
 	if err != nil {
 		log.Printf("NPM discovery error (request): %v", err)
-		return
+		return server.DiscoveryScanResult{}, "invalid_config"
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := app.HTTPClient.Do(req)
 	if err != nil {
 		log.Printf("NPM discovery error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "unreachable"
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("NPM discovery error: status %d", resp.StatusCode)
-		return
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return server.DiscoveryScanResult{}, "upstream_auth"
+		}
+		return server.DiscoveryScanResult{}, "bad_response"
 	}
 
 	var proxyHosts []struct {
@@ -324,7 +357,7 @@ func DiscoverNPMApps(app *server.App) {
 
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&proxyHosts); err != nil { // 10MB limit
 		log.Printf("NPM discovery decode error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "decode_failed"
 	}
 
 	var apps []models.App
@@ -366,7 +399,6 @@ func DiscoverNPMApps(app *server.App) {
 		apps = append(apps, a)
 	}
 
-	app.NPMDiscovery.SetApps(apps)
-
 	log.Printf("NPM discovery found %d apps", len(apps))
+	return server.DiscoveryScanResult{Apps: apps}, ""
 }

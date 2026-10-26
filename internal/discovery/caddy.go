@@ -58,12 +58,14 @@ func StartCaddyDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.CaddyDiscovery.Stop != nil {
+	if app.CaddyDiscovery.Stop != nil || app.CaddyDiscovery.StopClosing {
 		return // Already running
 	}
 
 	app.CaddyDiscovery.Enabled = true
+	app.CaddyDiscovery.EnableScan()
 	app.CaddyDiscovery.Stop = make(chan struct{})
+	stop := app.CaddyDiscovery.Stop
 
 	app.CaddyDiscovery.Wg.Add(1)
 	go func() {
@@ -78,7 +80,7 @@ func StartCaddyDiscoveryLoop(app *server.App) {
 		DiscoverCaddyApps(app) // Initial discovery
 		for {
 			select {
-			case <-app.CaddyDiscovery.Stop:
+			case <-stop:
 				return
 			case <-ticker.C:
 				DiscoverCaddyApps(app)
@@ -91,17 +93,22 @@ func StartCaddyDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopCaddyDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.CaddyDiscovery.Stop != nil {
+	if app.CaddyDiscovery.Stop != nil && !app.CaddyDiscovery.StopClosing {
+		app.CaddyDiscovery.StopClosing = true
+		app.CaddyDiscovery.DisableScan()
 		close(app.CaddyDiscovery.Stop)
-		app.CaddyDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
 
 	app.CaddyDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.CaddyDiscovery.Enabled = false
-	app.CaddyDiscovery.ClearApps()
+	if app.CaddyDiscovery.StopClosing {
+		app.CaddyDiscovery.Stop = nil
+		app.CaddyDiscovery.Enabled = false
+		app.CaddyDiscovery.DisableScan()
+		app.CaddyDiscovery.StopClosing = false
+	}
 	app.DiscoveryMu.Unlock()
 }
 
@@ -114,6 +121,10 @@ func DiscoverCaddyApps(app *server.App) {
 	if !enabled {
 		return
 	}
+	app.CaddyDiscovery.RunScan(func() (server.DiscoveryScanResult, string) { return scanCaddyApps(app) })
+}
+
+func scanCaddyApps(app *server.App) (server.DiscoveryScanResult, string) {
 
 	app.SysConfigMu.RLock()
 	caddyAdminURL := app.SystemConfig.CaddyAdminURL
@@ -122,18 +133,18 @@ func DiscoverCaddyApps(app *server.App) {
 	app.SysConfigMu.RUnlock()
 
 	if caddyAdminURL == "" {
-		return
+		return server.DiscoveryScanResult{}, "missing_config"
 	}
 
 	if err := urlvalidation.ValidateDiscoveryURL(caddyAdminURL); err != nil {
 		log.Printf("Caddy discovery SSRF protection: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "invalid_config"
 	}
 
 	req, err := http.NewRequest("GET", caddyAdminURL+"/config/apps/http/servers/", nil)
 	if err != nil {
 		log.Printf("Caddy discovery error creating request: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "invalid_config"
 	}
 
 	// Add basic auth if credentials are configured
@@ -144,18 +155,18 @@ func DiscoverCaddyApps(app *server.App) {
 	resp, err := app.HTTPClient.Do(req)
 	if err != nil {
 		log.Printf("Caddy discovery error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "unreachable"
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		log.Printf("Caddy discovery error: authentication required or invalid credentials")
-		return
+		return server.DiscoveryScanResult{}, "upstream_auth"
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Caddy discovery error: status %d", resp.StatusCode)
-		return
+		return server.DiscoveryScanResult{}, "bad_response"
 	}
 
 	// Parse the Caddy config response using flexible structure
@@ -163,7 +174,7 @@ func DiscoverCaddyApps(app *server.App) {
 
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&servers); err != nil { // 10MB limit
 		log.Printf("Caddy discovery decode error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "decode_failed"
 	}
 
 	var apps []models.App
@@ -246,9 +257,8 @@ func DiscoverCaddyApps(app *server.App) {
 		}
 	}
 
-	app.CaddyDiscovery.SetApps(apps)
-
 	log.Printf("Caddy discovery found %d apps", len(apps))
+	return server.DiscoveryScanResult{Apps: apps}, ""
 }
 
 // FindReverseProxyUpstream recursively searches Caddy handler configuration

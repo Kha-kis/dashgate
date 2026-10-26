@@ -262,6 +262,14 @@ Or configure via the admin UI under Discovery settings — enter your Unraid ser
 
 Discovery sources enabled by environment variables are read-only in the admin UI. Change those variables in your deployment configuration and restart DashGate; sources configured in the UI are saved to the database.
 
+### Discovery Diagnostics
+
+In **Admin > Discovery**, each source shows its latest scan state below the enable switch: Disabled, Waiting for first scan, Scanning, Completed, Completed with warnings, or Failed. The summary includes the last attempt and last successful scan. The open Discovery tab updates as scans finish, including scheduled scans. A failed scan may leave its previous routes visible; the count is explicitly labeled **Last successful** so it is not mistaken for a result from the failed attempt. Scan history is held in memory and resets when DashGate restarts or a source is disabled and re-enabled. Source connection tests check connectivity but do not count as completed discovery scans.
+
+Open **View scan details** under a source to search its currently discovered routes by name or URL and filter them by disposition: Inbox, Already added, Ignored, Rule matched, or Configured. The reason beside each route uses the same grouping rules as the Content inbox. A Hidden override remains in Inbox. Old Ignored entries that are no longer reported remain restorable in Content, but they are not counted as current routes in Discovery.
+
+**Refresh** requests a new scan and updates the status when that attempt starts and finishes. If a URL is absent from the latest successful route list, the search reports that it was not found; DashGate cannot infer why the upstream source or parser did not produce it. Scan failures and warnings show safe summaries here; server logs hold more detail.
+
 ### Managing Discovered Apps
 
 Discovered apps are hidden by default. Use the admin panel to:

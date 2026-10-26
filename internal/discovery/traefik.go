@@ -59,12 +59,14 @@ func StartTraefikDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.TraefikDiscovery.Stop != nil {
+	if app.TraefikDiscovery.Stop != nil || app.TraefikDiscovery.StopClosing {
 		return // Already running
 	}
 
 	app.TraefikDiscovery.Enabled = true
+	app.TraefikDiscovery.EnableScan()
 	app.TraefikDiscovery.Stop = make(chan struct{})
+	stop := app.TraefikDiscovery.Stop
 
 	app.TraefikDiscovery.Wg.Add(1)
 	go func() {
@@ -79,7 +81,7 @@ func StartTraefikDiscoveryLoop(app *server.App) {
 		DiscoverTraefikApps(app) // Initial discovery
 		for {
 			select {
-			case <-app.TraefikDiscovery.Stop:
+			case <-stop:
 				return
 			case <-ticker.C:
 				DiscoverTraefikApps(app)
@@ -92,17 +94,22 @@ func StartTraefikDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopTraefikDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.TraefikDiscovery.Stop != nil {
+	if app.TraefikDiscovery.Stop != nil && !app.TraefikDiscovery.StopClosing {
+		app.TraefikDiscovery.StopClosing = true
+		app.TraefikDiscovery.DisableScan()
 		close(app.TraefikDiscovery.Stop)
-		app.TraefikDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
 
 	app.TraefikDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.TraefikDiscovery.Enabled = false
-	app.TraefikDiscovery.ClearApps()
+	if app.TraefikDiscovery.StopClosing {
+		app.TraefikDiscovery.Stop = nil
+		app.TraefikDiscovery.Enabled = false
+		app.TraefikDiscovery.DisableScan()
+		app.TraefikDiscovery.StopClosing = false
+	}
 	app.DiscoveryMu.Unlock()
 }
 
@@ -115,6 +122,12 @@ func DiscoverTraefikApps(app *server.App) {
 	if !enabled {
 		return
 	}
+	app.TraefikDiscovery.RunScan(func() (server.DiscoveryScanResult, string) {
+		return scanTraefikApps(app)
+	})
+}
+
+func scanTraefikApps(app *server.App) (server.DiscoveryScanResult, string) {
 
 	app.SysConfigMu.RLock()
 	traefikURL := app.SystemConfig.TraefikURL
@@ -123,18 +136,18 @@ func DiscoverTraefikApps(app *server.App) {
 	app.SysConfigMu.RUnlock()
 
 	if traefikURL == "" {
-		return
+		return server.DiscoveryScanResult{}, "missing_config"
 	}
 
 	if err := urlvalidation.ValidateDiscoveryURL(traefikURL); err != nil {
 		log.Printf("Traefik discovery SSRF protection: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "invalid_config"
 	}
 
 	req, err := http.NewRequest("GET", traefikURL+"/api/http/routers", nil)
 	if err != nil {
 		log.Printf("Traefik discovery error creating request: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "invalid_config"
 	}
 
 	// Add basic auth if credentials are configured
@@ -145,19 +158,22 @@ func DiscoverTraefikApps(app *server.App) {
 	resp, err := app.HTTPClient.Do(req)
 	if err != nil {
 		log.Printf("Traefik discovery error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "unreachable"
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		log.Printf("Traefik discovery error: authentication required or invalid credentials")
-		return
+		return server.DiscoveryScanResult{}, "upstream_auth"
+	}
+	if resp.StatusCode != http.StatusOK {
+		return server.DiscoveryScanResult{}, "bad_response"
 	}
 
 	var routers []models.TraefikRouter
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&routers); err != nil { // 10MB limit
 		log.Printf("Traefik router decode error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "decode_failed"
 	}
 
 	var apps []models.App
@@ -205,9 +221,8 @@ func DiscoverTraefikApps(app *server.App) {
 		apps = append(apps, a)
 	}
 
-	app.TraefikDiscovery.SetApps(apps)
-
 	log.Printf("Traefik discovery found %d apps", len(apps))
+	return server.DiscoveryScanResult{Apps: apps}, ""
 }
 
 // ExtractHost parses a Traefik Host rule and returns the first hostname.

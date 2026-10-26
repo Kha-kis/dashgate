@@ -3286,3 +3286,34 @@
             color: var(--text-primary);
             font-weight: 500;
         }
+
+        .discovery-scan-diagnostics,
+        .discovery-scan-details {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin: 8px 0;
+            padding: 10px 12px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            overflow-wrap: anywhere;
+        }
+
+        .discovery-scan-diagnostics strong { color: var(--text-primary); }
+        .discovery-scan-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 4px; }
+        .discovery-scan-details summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+        .discovery-scan-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+        .discovery-scan-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
+        .discovery-scan-controls input, .discovery-scan-controls select {
+            min-width: 0; max-width: 100%; padding: 7px 9px; border-radius: 6px;
+            border: 1px solid var(--border-color); background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        .discovery-scan-controls input { flex: 1 1 180px; }
+        .discovery-diagnostic-route { padding: 10px 0; border-top: 1px solid var(--border-color); }
+        .discovery-diagnostic-route strong { color: var(--text-primary); }
+        .discovery-diagnostic-route .discovered-app-url { overflow-wrap: anywhere; }
+        @media (max-width: 600px) {
+            .discovery-scan-controls { align-items: stretch; flex-direction: column; }
+            .discovery-scan-controls input, .discovery-scan-controls select { width: 100%; }
+        }

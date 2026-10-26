@@ -26,6 +26,9 @@ let adminState = {
   discoveredSourceFilter: "all",
   selectedDiscoveredApps: new Set(),
   filteredDiscoveredApps: [],
+  discoveredAppsAvailable: false,
+  appsCatalogAvailable: false,
+  discoveryScanStatus: {},
 };
 
 async function loadAdminData() {
@@ -44,7 +47,12 @@ async function loadAdminData() {
 
     if (appsResp.ok) {
       adminState.apps = await appsResp.json();
+      adminState.appsCatalogAvailable = true;
       renderAppsList();
+      if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
+    } else {
+      adminState.appsCatalogAvailable = false;
+      if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
     }
 
     if (categoriesResp.ok) {
@@ -163,6 +171,8 @@ async function loadAdminData() {
 
   } catch (e) {
     console.error("Failed to load admin data:", e);
+    adminState.appsCatalogAvailable = false;
+    if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
   }
 }
 
@@ -176,9 +186,14 @@ async function reloadApps() {
     ]);
     if (appsResp.ok) {
       adminState.apps = await appsResp.json();
+      adminState.appsCatalogAvailable = true;
       renderAppsList();
       renderDiscoveredAppsList();
+      if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
       await loadAccessUsers();
+    } else {
+      adminState.appsCatalogAvailable = false;
+      if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
     }
     if (categoriesResp.ok) {
       adminState.categories = await categoriesResp.json();
@@ -186,6 +201,8 @@ async function reloadApps() {
     }
   } catch (e) {
     console.error("Failed to reload apps:", e);
+    adminState.appsCatalogAvailable = false;
+    if (typeof renderAllDiscoveryScanDetails === 'function') renderAllDiscoveryScanDetails();
   }
 }
 

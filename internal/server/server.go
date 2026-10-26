@@ -110,17 +110,22 @@ type LLDAPConfigRef struct {
 
 // DiscoveryManager tracks a single discovery source.
 type DiscoveryManager struct {
-	Enabled bool
-	Apps    []models.App
-	AppsMu  sync.RWMutex
-	Stop    chan struct{}
-	Wg      sync.WaitGroup
+	Enabled     bool
+	Apps        []models.App
+	AppsMu      sync.RWMutex
+	scan        DiscoveryScanSnapshot
+	scanEpoch   uint64
+	scanRunning bool
+	Stop        chan struct{}
+	StopClosing bool
+	Wg          sync.WaitGroup
 }
 
 // NewDiscoveryManager creates a new discovery manager.
 func NewDiscoveryManager() *DiscoveryManager {
 	return &DiscoveryManager{
 		Apps: []models.App{},
+		scan: DiscoveryScanSnapshot{State: ScanDisabled},
 	}
 }
 

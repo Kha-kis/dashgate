@@ -29,6 +29,9 @@ function sanitizeCSS(css) {
 
 function openSettings() {
   document.getElementById("settingsModal").classList.add("open");
+  if (document.querySelector('.settings-tab[data-tab="admin"].active') &&
+      document.querySelector('.admin-subtab[data-admin-tab="discovery"].active') &&
+      typeof startDiscoveryScanObserver === 'function') startDiscoveryScanObserver();
   updateSettingsUI();
   renderFavoritesList();
   updateSettingsUserSection();
@@ -36,12 +39,14 @@ function openSettings() {
 
 function closeSettings() {
   document.getElementById("settingsModal").classList.remove("open");
+  if (typeof stopDiscoveryScanObserver === 'function') stopDiscoveryScanObserver();
 }
 
 function initSettingsModal() {
   // Tab switching
   document.querySelectorAll(".settings-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
+      if (typeof stopDiscoveryScanObserver === 'function') stopDiscoveryScanObserver();
       document
         .querySelectorAll(".settings-tab")
         .forEach((t) => t.classList.remove("active"));
@@ -56,6 +61,8 @@ function initSettingsModal() {
       // Load admin data when admin tab is clicked
       if (tab.dataset.tab === "admin" && adminState.isAdmin) {
         loadAdminData();
+        if (document.querySelector('.admin-subtab[data-admin-tab="discovery"].active') &&
+            typeof startDiscoveryScanObserver === 'function') startDiscoveryScanObserver();
       }
       // Load profile data when profile tab is clicked
       if (tab.dataset.tab === "profile") {
@@ -73,12 +80,14 @@ function initSettingsModal() {
   document.querySelectorAll(".admin-subtab").forEach((tab) => {
     tab.addEventListener("click", () => {
       const target = tab.dataset.adminTab;
+      if (typeof stopDiscoveryScanObserver === 'function') stopDiscoveryScanObserver();
 
       // Update active tab
       document
         .querySelectorAll(".admin-subtab")
         .forEach((t) => t.classList.remove("active"));
       tab.classList.add("active");
+      if (target === 'discovery' && typeof startDiscoveryScanObserver === 'function') startDiscoveryScanObserver();
 
       // Show target panel
       document
