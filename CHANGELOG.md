@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.5.10] - 2026-10-26
+
+### Added
+
+- **Homepage Docker label discovery** — when Docker discovery is enabled, containers with `homepage.name` and an HTTP(S) `homepage.href` appear in the existing admin discovery inbox. DashGate also reads `homepage.description`. Admins choose the category, icon, and access groups before publishing. Explicit `dashgate.enable` labels retain priority.
+
+### Security
+
+- Unconfigured discovered routes no longer trigger background health requests. Discovered route names and URLs are safely handled by admin Configure and reset actions.
+
+### Upgrade
+
+- No database migration or new configuration is required. Back up the persistent `/config` directory before upgrading. Existing Homepage-labeled containers may now appear in the inbox, but they are not published automatically. Homepage display groups, icons, and widget labels are not imported as DashGate permissions or assets.
+
 ## [1.5.9] - 2026-10-26
 
 ### Added
