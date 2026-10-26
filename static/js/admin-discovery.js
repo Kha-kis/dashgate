@@ -943,7 +943,7 @@
                     : '';
 
                 const resetBtn = override
-                    ? `<button class="admin-action-btn danger" onclick="confirmResetDiscoveredApp('${encodeURIComponent(app.url)}', '${escapeHtml(displayName).replace(/'/g, "\\'")}')" title="Reset">
+                    ? `<button class="admin-action-btn danger" onclick="confirmResetDiscoveredApp(${discoveryJsArg(encodeURIComponent(app.url))}, ${discoveryJsArg(displayName)})" title="Reset">
                         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <polyline points="3 6 5 6 21 6"/>
                             <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
@@ -968,7 +968,7 @@
                         <div class="admin-item-actions">
                             <button class="admin-action-btn discovery-text-action" onclick="dismissDiscoveredApp('${encodeURIComponent(app.source).replace(/'/g, '%27')}', '${encodeURIComponent(app.url).replace(/'/g, '%27')}')" title="Dismiss" aria-label="Dismiss">Dismiss</button>
                             <button type="button" class="admin-action-btn discovery-text-action ignore-rule-from-route" aria-label="Ignore similar routes">Rule</button>
-                            <button class="admin-action-btn" onclick="openDiscoveredAppModal('${encodeURIComponent(app.url)}')" title="Configure">
+                            <button class="admin-action-btn" onclick="openDiscoveredAppModal(${discoveryJsArg(encodeURIComponent(app.url))})" title="Configure">
                                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
                                     <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -991,6 +991,12 @@
 
         function discoveredAppKey(app) {
             return JSON.stringify([app.source, app.url]);
+        }
+
+        // Inline handlers need both a JavaScript string literal and HTML
+        // attribute escaping; URL encoding alone leaves apostrophes intact.
+        function discoveryJsArg(value) {
+            return escapeHtml(JSON.stringify(String(value)));
         }
 
         // One current route receives exactly one Content/diagnostics disposition.
@@ -1330,7 +1336,7 @@
                                 </div>
                             </div>
                             <div class="admin-item-actions">
-                                <button class="admin-action-btn danger" onclick="confirmDeleteStaleOverride('${encodeURIComponent(o.url)}', '${escapeHtml(o.nameOverride || o.url).replace(/'/g, "\\'")}')" title="Remove">
+                                <button class="admin-action-btn danger" onclick="confirmDeleteStaleOverride(${discoveryJsArg(encodeURIComponent(o.url))}, ${discoveryJsArg(o.nameOverride || o.url)})" title="Remove">
                                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                         <polyline points="3 6 5 6 21 6"/>
                                         <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>

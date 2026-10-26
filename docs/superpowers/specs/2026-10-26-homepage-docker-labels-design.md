@@ -15,9 +15,10 @@ Explicit `dashgate.enable` takes precedence: `true` keeps current DashGate label
 - Reject incomplete Homepage labels, non-HTTP(S) links, missing hosts, and URL userinfo before they enter discovery.
 - Do not map `homepage.group` to `App.Groups`: Homepage uses it for display, while DashGate uses groups to control access. Admins select DashGate category and access groups in Configure.
 - Do not import `homepage.icon` because DashGate expects a local icon asset, or any `homepage.widget.*` data because it may contain credentials. Admins can select a local icon in Configure.
+- Unreviewed discovered URLs must not trigger server-side health requests. Only configured discovered apps enter the health checker. Discovered route actions must keep label-provided URLs and names as data in the admin DOM.
 - Keep existing DashGate label behavior, including its group and dependency parsing. No configuration or database migration is needed.
 - Update the Docker settings hint and README so the supported labels and review step are visible.
 
 ## Acceptance
 
-Tests cover Homepage discovery through the Docker scan, explicit label precedence, disabled containers, malformed/incomplete Homepage links, and the separation of Homepage category and widget data from DashGate authorization fields. Full Go tests, formatting, and the relevant UI check must pass before proposing integration.
+Tests cover Homepage discovery through the Docker scan, explicit label precedence, disabled containers, malformed/incomplete Homepage links, the separation of Homepage category and widget data from DashGate authorization fields, unreviewed health requests, and admin action escaping. Full Go tests, formatting, and the relevant UI check must pass before proposing integration.

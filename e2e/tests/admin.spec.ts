@@ -8,6 +8,25 @@ test.describe("Admin Panel", () => {
     await login(page);
   });
 
+  test("discovered route actions treat URL and name as data", async ({ page }) => {
+    const attack = "'-window.__discoveryXss=true-'";
+    const url = `https://example.test/${attack}`;
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: {
+      active: [{ name: attack, url, source: 'docker' }],
+      stale: [], ignored: [], ruleMatches: [], ignoreRules: [],
+    } }));
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="content"]').click();
+    await page.evaluate(() => { (window as any).__discoveryXss = false; });
+    const row = page.locator('#discoveredAppsList .discovered-app-item').first();
+    await expect(row).toBeVisible();
+    await row.locator('button[title="Configure"]').click();
+    await expect(page.locator('#discoveredAppUrl')).toHaveValue(url);
+    expect(await page.evaluate(() => (window as any).__discoveryXss)).toBe(false);
+  });
+
   test("discovery disposition assigns only current source routes", async ({ page }) => {
     const result = await page.evaluate(() => {
       const active = [

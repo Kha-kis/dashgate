@@ -111,8 +111,12 @@ func RunHealthChecks(app *server.App) {
 	}
 	app.ConfigMu.RUnlock()
 
-	// Include discovered apps in health checks
+	// Only probe discovered apps after an admin has configured them. Raw
+	// discovery labels are untrusted and can point at internal endpoints.
 	for _, dApp := range discovery.GetAllRawDiscoveredApps(app) {
+		if dApp.Override == nil || dApp.Override.Hidden {
+			continue
+		}
 		// Use URLOverride if set, otherwise use discovered URL
 		url := dApp.URL
 		if dApp.Override != nil && dApp.Override.URLOverride != "" {

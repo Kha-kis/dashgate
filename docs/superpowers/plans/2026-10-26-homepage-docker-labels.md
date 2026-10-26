@@ -17,5 +17,5 @@
 - [x] Cover Homepage labels in the Docker scan integration test.
 - [x] Explain supported labels in README and Admin → Discovery.
 - [x] Format Go code and run focused and full tests.
-- [ ] Review the change for code, security, and usability regressions; address findings.
+- [x] Review the change for code, security, and usability regressions; address findings.
 - [ ] Create a PR and verify CI.
