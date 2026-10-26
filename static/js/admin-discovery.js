@@ -11,11 +11,19 @@
         };
         const discoveryPolls = new Map();
 
+        function discoveryCountHint(status) {
+            if (status.scan?.state === 'failed') return `Last successful: ${status.scan.lastSuccessCount || 0} app(s)`;
+            return `${status.appCount} app(s) discovered`;
+        }
+
         function renderDiscoveryScanStatus(source, scan) {
             const container = document.getElementById(`discoveryScanSummary-${source}`);
             if (!container) return;
             if (!scan || !discoverySources.includes(source)) {
+                adminState.discoveryScanStatus ||= {};
+                adminState.discoveryScanStatus[source] = null;
                 container.textContent = 'Unavailable · Scan status could not be loaded';
+                renderDiscoveryScanDetails(source);
                 return;
             }
             adminState.discoveryScanStatus ||= {};
@@ -52,6 +60,10 @@
         function renderDiscoveryScanDetails(source) {
             const container = document.getElementById(`discoveryScanRoutes-${source}`);
             if (!container) return;
+            if (!adminState.discoveryScanStatus?.[source]) {
+                container.textContent = 'Unavailable · Scan status could not be loaded';
+                return;
+            }
             if (!adminState.discoveredAppsAvailable || !adminState.appsCatalogAvailable) {
                 container.textContent = 'Unavailable · Route data could not be loaded';
                 return;
@@ -200,7 +212,7 @@
 
                     // Update hint
                     if (status.enabled) {
-                        hint.textContent = `${status.appCount} app(s) discovered`;
+                        hint.textContent = discoveryCountHint(status);
                         hint.style.color = 'var(--green)';
                         refreshBtn.style.display = 'flex';
                         configSection.style.display = 'block';
@@ -250,7 +262,7 @@
 
                     // Update hint
                     if (status.enabled) {
-                        hint.textContent = `${status.appCount} app(s) discovered`;
+                        hint.textContent = discoveryCountHint(status);
                         hint.style.color = 'var(--green)';
                         refreshBtn.style.display = 'flex';
                         configSection.style.display = 'block';
@@ -331,7 +343,7 @@
 
                     // Update hint
                     if (status.enabled) {
-                        hint.textContent = `${status.appCount} app(s) discovered`;
+                        hint.textContent = discoveryCountHint(status);
                         hint.style.color = 'var(--green)';
                         refreshBtn.style.display = 'flex';
                         configSection.style.display = 'block';
@@ -381,7 +393,7 @@
 
                     // Update hint
                     if (status.enabled) {
-                        hint.textContent = `${status.appCount} app(s) discovered`;
+                        hint.textContent = discoveryCountHint(status);
                         hint.style.color = 'var(--green)';
                         refreshBtn.style.display = 'flex';
                         configSection.style.display = 'block';
@@ -465,7 +477,7 @@
 
                     // Update hint
                     if (status.enabled) {
-                        hint.textContent = `${status.appCount} app(s) discovered`;
+                        hint.textContent = discoveryCountHint(status);
                         hint.style.color = 'var(--green)';
                         refreshBtn.style.display = 'flex';
                         configSection.style.display = 'block';
@@ -546,7 +558,7 @@
 
                     // Update hint
                     if (status.enabled) {
-                        hint.textContent = `${status.appCount} app(s) discovered`;
+                        hint.textContent = discoveryCountHint(status);
                         hint.style.color = 'var(--green)';
                         refreshBtn.style.display = 'flex';
                         configSection.style.display = 'block';

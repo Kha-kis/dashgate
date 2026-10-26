@@ -73,6 +73,7 @@ test.describe("Admin Panel", () => {
     for (const source of sources) await expect(page.locator(`#discoveryScanSummary-${source}`)).toBeVisible();
     await expect(page.locator('#discoveryScanSummary-nginx')).toContainText('Failed');
     await expect(page.locator('#discoveryScanSummary-nginx')).toContainText('Last successful: 3');
+    await expect(page.locator('#nginxStatusHint')).toContainText('Last successful: 3');
     await expect(page.locator('#discoveryScanSummary-traefik')).toContainText('0 routes');
     await expect(page.locator('#discoveryScanSummary-npm')).toContainText('Waiting for first scan');
     await expect(page.locator('#discoveryScanSummary-caddy')).toContainText('Completed with warnings');
@@ -105,6 +106,26 @@ test.describe("Admin Panel", () => {
     await page.locator('[data-tab="admin"]').click();
     await page.locator('[data-admin-tab="discovery"]').click();
     await page.locator('#discoveryScanDetails-docker summary').click();
+    await expect(page.locator('#discoveryScanRoutes-docker')).toContainText('Unavailable');
+  });
+
+  test("discovery diagnostics stop showing stale details when source status fails", async ({ page }) => {
+    let failStatus = false;
+    await page.route('**/api/admin/docker-discovery', route => failStatus
+      ? route.fulfill({ status: 503, body: 'down' })
+      : route.fulfill({ json: { enabled: true, appCount: 1, envOverride: false,
+          scan: { state: 'completed', startedAt: '2026-10-26T12:00:00Z', completedAt: '2026-10-26T12:00:01Z', lastSuccessAt: '2026-10-26T12:00:01Z', lastSuccessCount: 1, warningCount: 0, issueCode: '' } } }));
+    await page.route('**/api/admin/discovered-apps', route => route.fulfill({ json: { active: [
+      { name: 'Old route', url: 'https://old.example', source: 'docker' },
+    ], stale: [], ignored: [], ruleMatches: [], ignoreRules: [] } }));
+    await page.reload();
+    await page.locator('.dock-item').nth(4).click();
+    await page.locator('[data-tab="admin"]').click();
+    await page.locator('[data-admin-tab="discovery"]').click();
+    await page.locator('#discoveryScanDetails-docker summary').click();
+    await expect(page.locator('#discoveryScanRoutes-docker')).toContainText('Old route');
+    failStatus = true;
+    await page.evaluate(() => (window as any).loadDockerDiscoveryStatus());
     await expect(page.locator('#discoveryScanRoutes-docker')).toContainText('Unavailable');
   });
 

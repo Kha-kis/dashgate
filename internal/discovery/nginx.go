@@ -103,7 +103,7 @@ func StartNginxDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.NginxDiscovery.Stop != nil {
+	if app.NginxDiscovery.Stop != nil || app.NginxDiscovery.StopClosing {
 		return // Already running
 	}
 
@@ -138,7 +138,8 @@ func StartNginxDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopNginxDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.NginxDiscovery.Stop != nil {
+	if app.NginxDiscovery.Stop != nil && !app.NginxDiscovery.StopClosing {
+		app.NginxDiscovery.StopClosing = true
 		app.NginxDiscovery.DisableScan()
 		close(app.NginxDiscovery.Stop)
 	}
@@ -147,9 +148,12 @@ func StopNginxDiscoveryLoop(app *server.App) {
 	app.NginxDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.NginxDiscovery.Stop = nil
-	app.NginxDiscovery.Enabled = false
-	app.NginxDiscovery.DisableScan()
+	if app.NginxDiscovery.StopClosing {
+		app.NginxDiscovery.Stop = nil
+		app.NginxDiscovery.Enabled = false
+		app.NginxDiscovery.DisableScan()
+		app.NginxDiscovery.StopClosing = false
+	}
 	app.DiscoveryMu.Unlock()
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"dashgate/internal/server"
 )
@@ -114,6 +115,38 @@ func TestDiscoveryRefreshOverlap(t *testing.T) {
 	<-done
 	if got := app.TraefikDiscovery.GetScanSnapshot(); got.State != server.ScanWaiting || got.LastSuccessCount != 0 {
 		t.Fatalf("old refresh republished: %+v", got)
+	}
+}
+
+func TestDiscoveryConcurrentStop(t *testing.T) {
+	app := server.New()
+	app.DockerDiscovery.Enabled = true
+	app.DockerDiscovery.EnableScan()
+	stop := make(chan struct{})
+	app.DockerDiscovery.Stop = stop
+	app.DockerDiscovery.Wg.Add(1)
+	firstDone := make(chan struct{})
+	go func() { StopDockerDiscoveryLoop(app); close(firstDone) }()
+	<-stop
+	secondDone := make(chan any, 1)
+	go func() {
+		defer func() {
+			panicValue := recover()
+			if panicValue != nil {
+				app.DiscoveryMu.Unlock()
+			}
+			secondDone <- panicValue
+		}()
+		StopDockerDiscoveryLoop(app)
+	}()
+	time.Sleep(20 * time.Millisecond)
+	app.DockerDiscovery.Wg.Done()
+	<-firstDone
+	if panicValue := <-secondDone; panicValue != nil {
+		t.Fatalf("concurrent stop panicked: %v", panicValue)
+	}
+	if got := app.DockerDiscovery.GetScanSnapshot().State; got != server.ScanDisabled {
+		t.Fatalf("stopped state = %q", got)
 	}
 }
 

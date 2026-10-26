@@ -80,7 +80,7 @@ func StartNPMDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.NPMDiscovery.Stop != nil {
+	if app.NPMDiscovery.Stop != nil || app.NPMDiscovery.StopClosing {
 		return // Already running
 	}
 
@@ -115,7 +115,8 @@ func StartNPMDiscoveryLoop(app *server.App) {
 // clears all discovered apps, and resets the NPM token.
 func StopNPMDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.NPMDiscovery.Stop != nil {
+	if app.NPMDiscovery.Stop != nil && !app.NPMDiscovery.StopClosing {
+		app.NPMDiscovery.StopClosing = true
 		app.NPMDiscovery.DisableScan()
 		close(app.NPMDiscovery.Stop)
 	}
@@ -124,9 +125,12 @@ func StopNPMDiscoveryLoop(app *server.App) {
 	app.NPMDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.NPMDiscovery.Stop = nil
-	app.NPMDiscovery.Enabled = false
-	app.NPMDiscovery.DisableScan()
+	if app.NPMDiscovery.StopClosing {
+		app.NPMDiscovery.Stop = nil
+		app.NPMDiscovery.Enabled = false
+		app.NPMDiscovery.DisableScan()
+		app.NPMDiscovery.StopClosing = false
+	}
 	// Also clear the token
 	app.NPMTokenMu.Lock()
 	app.NPMToken = ""

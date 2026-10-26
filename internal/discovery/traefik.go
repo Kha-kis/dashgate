@@ -59,7 +59,7 @@ func StartTraefikDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.TraefikDiscovery.Stop != nil {
+	if app.TraefikDiscovery.Stop != nil || app.TraefikDiscovery.StopClosing {
 		return // Already running
 	}
 
@@ -94,7 +94,8 @@ func StartTraefikDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopTraefikDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.TraefikDiscovery.Stop != nil {
+	if app.TraefikDiscovery.Stop != nil && !app.TraefikDiscovery.StopClosing {
+		app.TraefikDiscovery.StopClosing = true
 		app.TraefikDiscovery.DisableScan()
 		close(app.TraefikDiscovery.Stop)
 	}
@@ -103,9 +104,12 @@ func StopTraefikDiscoveryLoop(app *server.App) {
 	app.TraefikDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.TraefikDiscovery.Stop = nil
-	app.TraefikDiscovery.Enabled = false
-	app.TraefikDiscovery.DisableScan()
+	if app.TraefikDiscovery.StopClosing {
+		app.TraefikDiscovery.Stop = nil
+		app.TraefikDiscovery.Enabled = false
+		app.TraefikDiscovery.DisableScan()
+		app.TraefikDiscovery.StopClosing = false
+	}
 	app.DiscoveryMu.Unlock()
 }
 

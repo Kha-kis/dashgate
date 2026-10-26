@@ -117,6 +117,7 @@ type DiscoveryManager struct {
 	scanEpoch   uint64
 	scanRunning bool
 	Stop        chan struct{}
+	StopClosing bool
 	Wg          sync.WaitGroup
 }
 

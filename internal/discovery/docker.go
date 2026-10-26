@@ -43,7 +43,7 @@ func StartDockerDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.DockerDiscovery.Stop != nil {
+	if app.DockerDiscovery.Stop != nil || app.DockerDiscovery.StopClosing {
 		return // Already running
 	}
 
@@ -78,7 +78,8 @@ func StartDockerDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopDockerDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.DockerDiscovery.Stop != nil {
+	if app.DockerDiscovery.Stop != nil && !app.DockerDiscovery.StopClosing {
+		app.DockerDiscovery.StopClosing = true
 		app.DockerDiscovery.DisableScan()
 		close(app.DockerDiscovery.Stop)
 	}
@@ -87,9 +88,12 @@ func StopDockerDiscoveryLoop(app *server.App) {
 	app.DockerDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.DockerDiscovery.Stop = nil
-	app.DockerDiscovery.Enabled = false
-	app.DockerDiscovery.DisableScan()
+	if app.DockerDiscovery.StopClosing {
+		app.DockerDiscovery.Stop = nil
+		app.DockerDiscovery.Enabled = false
+		app.DockerDiscovery.DisableScan()
+		app.DockerDiscovery.StopClosing = false
+	}
 	app.DiscoveryMu.Unlock()
 }
 

@@ -84,7 +84,7 @@ func StartUnraidDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.UnraidDiscovery.Stop != nil {
+	if app.UnraidDiscovery.Stop != nil || app.UnraidDiscovery.StopClosing {
 		return // Already running
 	}
 
@@ -119,7 +119,8 @@ func StartUnraidDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopUnraidDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.UnraidDiscovery.Stop != nil {
+	if app.UnraidDiscovery.Stop != nil && !app.UnraidDiscovery.StopClosing {
+		app.UnraidDiscovery.StopClosing = true
 		app.UnraidDiscovery.DisableScan()
 		close(app.UnraidDiscovery.Stop)
 	}
@@ -128,9 +129,12 @@ func StopUnraidDiscoveryLoop(app *server.App) {
 	app.UnraidDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.UnraidDiscovery.Stop = nil
-	app.UnraidDiscovery.Enabled = false
-	app.UnraidDiscovery.DisableScan()
+	if app.UnraidDiscovery.StopClosing {
+		app.UnraidDiscovery.Stop = nil
+		app.UnraidDiscovery.Enabled = false
+		app.UnraidDiscovery.DisableScan()
+		app.UnraidDiscovery.StopClosing = false
+	}
 	app.DiscoveryMu.Unlock()
 }
 

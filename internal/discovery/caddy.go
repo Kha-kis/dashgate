@@ -58,7 +58,7 @@ func StartCaddyDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	defer app.DiscoveryMu.Unlock()
 
-	if app.CaddyDiscovery.Stop != nil {
+	if app.CaddyDiscovery.Stop != nil || app.CaddyDiscovery.StopClosing {
 		return // Already running
 	}
 
@@ -93,7 +93,8 @@ func StartCaddyDiscoveryLoop(app *server.App) {
 // and clears all discovered apps.
 func StopCaddyDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
-	if app.CaddyDiscovery.Stop != nil {
+	if app.CaddyDiscovery.Stop != nil && !app.CaddyDiscovery.StopClosing {
+		app.CaddyDiscovery.StopClosing = true
 		app.CaddyDiscovery.DisableScan()
 		close(app.CaddyDiscovery.Stop)
 	}
@@ -102,9 +103,12 @@ func StopCaddyDiscoveryLoop(app *server.App) {
 	app.CaddyDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
-	app.CaddyDiscovery.Stop = nil
-	app.CaddyDiscovery.Enabled = false
-	app.CaddyDiscovery.DisableScan()
+	if app.CaddyDiscovery.StopClosing {
+		app.CaddyDiscovery.Stop = nil
+		app.CaddyDiscovery.Enabled = false
+		app.CaddyDiscovery.DisableScan()
+		app.CaddyDiscovery.StopClosing = false
+	}
 	app.DiscoveryMu.Unlock()
 }
 
