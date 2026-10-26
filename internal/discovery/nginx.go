@@ -61,10 +61,17 @@ func (limiter *includeWarningLimiter) shouldLog(path string, err error, now time
 var nginxIncludeWarnings includeWarningLimiter
 
 type includeResolver struct {
-	readFile func(string) ([]byte, error)
-	logf     func(string, ...any)
-	warnings *includeWarningLimiter
-	now      func() time.Time
+	readFile     func(string) ([]byte, error)
+	logf         func(string, ...any)
+	warnings     *includeWarningLimiter
+	now          func() time.Time
+	warningCount *int
+}
+
+func (resolver *includeResolver) countWarning() {
+	if resolver.warningCount != nil {
+		*resolver.warningCount++
+	}
 }
 
 // InitNginxDiscovery checks environment variables and system config,
@@ -101,7 +108,9 @@ func StartNginxDiscoveryLoop(app *server.App) {
 	}
 
 	app.NginxDiscovery.Enabled = true
+	app.NginxDiscovery.EnableScan()
 	app.NginxDiscovery.Stop = make(chan struct{})
+	stop := app.NginxDiscovery.Stop
 
 	app.NginxDiscovery.Wg.Add(1)
 	go func() {
@@ -116,7 +125,7 @@ func StartNginxDiscoveryLoop(app *server.App) {
 		DiscoverNginxApps(app) // Initial discovery
 		for {
 			select {
-			case <-app.NginxDiscovery.Stop:
+			case <-stop:
 				return
 			case <-ticker.C:
 				DiscoverNginxApps(app)
@@ -130,16 +139,17 @@ func StartNginxDiscoveryLoop(app *server.App) {
 func StopNginxDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	if app.NginxDiscovery.Stop != nil {
+		app.NginxDiscovery.DisableScan()
 		close(app.NginxDiscovery.Stop)
-		app.NginxDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
 
 	app.NginxDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
+	app.NginxDiscovery.Stop = nil
 	app.NginxDiscovery.Enabled = false
-	app.NginxDiscovery.ClearApps()
+	app.NginxDiscovery.DisableScan()
 	app.DiscoveryMu.Unlock()
 }
 
@@ -349,6 +359,7 @@ func (resolver *includeResolver) resolve(content string, depth int) string {
 			// Resolve symlinks
 			resolved, err := filepath.EvalSymlinks(m)
 			if err != nil {
+				resolver.countWarning()
 				log.Printf("Nginx include: cannot resolve symlinks for %s, skipping", m)
 				continue
 			}
@@ -362,6 +373,7 @@ func (resolver *includeResolver) resolve(content string, depth int) string {
 			// Check file size before reading
 			fi, err := os.Stat(resolved)
 			if err != nil {
+				resolver.countWarning()
 				log.Printf("Nginx include: cannot stat %s: %v", resolved, err)
 				continue
 			}
@@ -372,6 +384,7 @@ func (resolver *includeResolver) resolve(content string, depth int) string {
 
 			data, err := resolver.readFile(resolved)
 			if err != nil {
+				resolver.countWarning()
 				if resolver.warnings.shouldLog(resolved, err, resolver.now()) {
 					resolver.logf("Nginx include: cannot read %s: %v", resolved, err)
 				}
@@ -446,6 +459,10 @@ func DiscoverNginxApps(app *server.App) {
 	if !enabled {
 		return
 	}
+	app.NginxDiscovery.RunScan(func() (server.DiscoveryScanResult, string) { return scanNginxApps(app, os.ReadFile) })
+}
+
+func scanNginxApps(app *server.App, readFile func(string) ([]byte, error)) (server.DiscoveryScanResult, string) {
 
 	app.SysConfigMu.RLock()
 	nginxConfigPath := app.SystemConfig.NginxConfigPath
@@ -459,26 +476,29 @@ func DiscoverNginxApps(app *server.App) {
 	info, err := os.Stat(nginxConfigPath)
 	if err != nil {
 		log.Printf("Nginx config path error: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "missing_config"
 	}
 	if !info.IsDir() {
 		log.Printf("Nginx config path is not a directory: %s", nginxConfigPath)
-		return
+		return server.DiscoveryScanResult{}, "invalid_config"
 	}
 
 	var apps []models.App
+	warningCount := 0
 	seenURLs := make(map[string]bool)
 
 	// Process a config file: read content, resolve includes, parse server and location blocks
 	processConfigFile := func(filePath string) {
-		data, err := os.ReadFile(filePath)
+		data, err := readFile(filePath)
 		if err != nil {
+			warningCount++
 			log.Printf("Error reading nginx config file %s: %v", filePath, err)
 			return
 		}
 
 		// Inline all include directives
-		configContent := resolveIncludes(string(data), 0)
+		resolver := includeResolver{readFile: readFile, logf: log.Printf, warnings: &nginxIncludeWarnings, now: time.Now, warningCount: &warningCount}
+		configContent := resolver.resolve(string(data), 0)
 
 		// Strip comments to prevent false matches on braces or keywords in comments
 		configContent = commentRe.ReplaceAllString(configContent, "")
@@ -618,7 +638,7 @@ func DiscoverNginxApps(app *server.App) {
 	entries, err := os.ReadDir(nginxConfigPath)
 	if err != nil {
 		log.Printf("Error reading nginx config directory: %v", err)
-		return
+		return server.DiscoveryScanResult{}, "unreachable"
 	}
 
 	for _, entry := range entries {
@@ -633,7 +653,9 @@ func DiscoverNginxApps(app *server.App) {
 	// Deduplicate: remove sub-paths (e.g., keep /lidarr, remove /lidarr/api)
 	apps = dedupeAppsByBasePath(apps)
 
-	app.NginxDiscovery.SetApps(apps)
-
 	log.Printf("Nginx discovery found %d apps", len(apps))
+	if warningCount > 0 {
+		return server.DiscoveryScanResult{Apps: apps, WarningCount: warningCount, IssueCode: "partial_read"}, ""
+	}
+	return server.DiscoveryScanResult{Apps: apps}, ""
 }
