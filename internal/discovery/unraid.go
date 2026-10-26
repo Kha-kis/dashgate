@@ -3,6 +3,7 @@ package discovery
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -32,6 +33,14 @@ const unraidGraphQLQuery = `{
     }
   }
 }`
+
+var (
+	errUnraidInvalid     = errors.New("invalid configuration")
+	errUnraidUnreachable = errors.New("unreachable")
+	errUnraidAuth        = errors.New("upstream authentication")
+	errUnraidBadResponse = errors.New("bad response")
+	errUnraidDecode      = errors.New("decode failed")
+)
 
 // InitUnraidDiscovery checks environment variables and system config,
 // then starts the Unraid discovery loop if enabled.
@@ -80,7 +89,9 @@ func StartUnraidDiscoveryLoop(app *server.App) {
 	}
 
 	app.UnraidDiscovery.Enabled = true
+	app.UnraidDiscovery.EnableScan()
 	app.UnraidDiscovery.Stop = make(chan struct{})
+	stop := app.UnraidDiscovery.Stop
 
 	app.UnraidDiscovery.Wg.Add(1)
 	go func() {
@@ -95,7 +106,7 @@ func StartUnraidDiscoveryLoop(app *server.App) {
 		DiscoverUnraidApps(app) // Initial discovery
 		for {
 			select {
-			case <-app.UnraidDiscovery.Stop:
+			case <-stop:
 				return
 			case <-ticker.C:
 				DiscoverUnraidApps(app)
@@ -109,16 +120,17 @@ func StartUnraidDiscoveryLoop(app *server.App) {
 func StopUnraidDiscoveryLoop(app *server.App) {
 	app.DiscoveryMu.Lock()
 	if app.UnraidDiscovery.Stop != nil {
+		app.UnraidDiscovery.DisableScan()
 		close(app.UnraidDiscovery.Stop)
-		app.UnraidDiscovery.Stop = nil
 	}
 	app.DiscoveryMu.Unlock()
 
 	app.UnraidDiscovery.Wg.Wait()
 
 	app.DiscoveryMu.Lock()
+	app.UnraidDiscovery.Stop = nil
 	app.UnraidDiscovery.Enabled = false
-	app.UnraidDiscovery.ClearApps()
+	app.UnraidDiscovery.DisableScan()
 	app.DiscoveryMu.Unlock()
 }
 
@@ -131,6 +143,10 @@ func DiscoverUnraidApps(app *server.App) {
 	if !enabled {
 		return
 	}
+	app.UnraidDiscovery.RunScan(func() (server.DiscoveryScanResult, string) { return scanUnraidApps(app) })
+}
+
+func scanUnraidApps(app *server.App) (server.DiscoveryScanResult, string) {
 
 	app.SysConfigMu.RLock()
 	unraidURL := app.SystemConfig.UnraidURL
@@ -138,23 +154,34 @@ func DiscoverUnraidApps(app *server.App) {
 	app.SysConfigMu.RUnlock()
 
 	if unraidURL == "" || apiKey == "" {
-		return
+		return server.DiscoveryScanResult{}, "missing_config"
 	}
 
 	apps, err := queryUnraidContainers(app.HTTPClient, unraidURL, apiKey)
 	if err != nil {
 		log.Printf("Unraid discovery error: %v", err)
-		return
+		switch {
+		case errors.Is(err, errUnraidInvalid):
+			return server.DiscoveryScanResult{}, "invalid_config"
+		case errors.Is(err, errUnraidAuth):
+			return server.DiscoveryScanResult{}, "upstream_auth"
+		case errors.Is(err, errUnraidDecode):
+			return server.DiscoveryScanResult{}, "decode_failed"
+		case errors.Is(err, errUnraidBadResponse):
+			return server.DiscoveryScanResult{}, "bad_response"
+		default:
+			return server.DiscoveryScanResult{}, "unreachable"
+		}
 	}
 
-	app.UnraidDiscovery.SetApps(apps)
 	log.Printf("Unraid discovery found %d app(s)", len(apps))
+	return server.DiscoveryScanResult{Apps: apps}, ""
 }
 
 // queryUnraidContainers queries the Unraid GraphQL API and returns discovered apps.
 func queryUnraidContainers(client *http.Client, unraidURL, apiKey string) ([]models.App, error) {
 	if err := urlvalidation.ValidateDiscoveryURL(unraidURL); err != nil {
-		return nil, fmt.Errorf("Unraid SSRF protection: %w", err)
+		return nil, fmt.Errorf("%w: Unraid SSRF protection: %v", errUnraidInvalid, err)
 	}
 
 	graphqlEndpoint := strings.TrimSuffix(unraidURL, "/") + "/graphql"
@@ -169,32 +196,32 @@ func queryUnraidContainers(client *http.Client, unraidURL, apiKey string) ([]mod
 
 	req, err := http.NewRequest("POST", graphqlEndpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%w: failed to create request: %v", errUnraidInvalid, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", apiKey)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("%w: request failed: %v", errUnraidUnreachable, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("authentication failed (status %d)", resp.StatusCode)
+		return nil, fmt.Errorf("%w: authentication failed (status %d)", errUnraidAuth, resp.StatusCode)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: API returned status %d", errUnraidBadResponse, resp.StatusCode)
 	}
 
 	var gqlResp models.UnraidGraphQLResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&gqlResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("%w: failed to decode response: %v", errUnraidDecode, err)
 	}
 
 	if len(gqlResp.Errors) > 0 {
-		return nil, fmt.Errorf("GraphQL error: %s", gqlResp.Errors[0].Message)
+		return nil, fmt.Errorf("%w: GraphQL error: %s", errUnraidBadResponse, gqlResp.Errors[0].Message)
 	}
 
 	var apps []models.App
