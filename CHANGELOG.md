@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [1.5.9] - 2026-10-26
+
+### Added
+
+- **Discovery scan diagnostics** — Admin > Discovery now shows each source's latest scan state, last attempt, last successful scan, and safe failure or warning summaries. Expand **View scan details** to search current routes and see why each appears in Inbox, Already added, Ignored, Rule matched, or Configured. Refresh updates the status as the new scan runs.
+
+### Upgrade
+
+- No database migration or new configuration is required. Back up the persistent `/config` directory before upgrading. Scan history is held in memory and starts at **Waiting for first scan** after restart or after a source is disabled and re-enabled; discovered routes and published apps retain their existing behavior.
+
 ## [1.5.8] - 2026-10-26
 
 ### Improved
