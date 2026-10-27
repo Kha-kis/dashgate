@@ -187,7 +187,7 @@ func scanDockerApps(app *server.App) (server.DiscoveryScanResult, string) {
 	}
 
 	if len(apps) == 0 && len(containers) > 0 {
-		log.Printf("Docker discovery: found %d containers, 0 with eligible DashGate, Homarr, or Homepage labels", len(containers))
+		log.Printf("Docker discovery: found %d containers, 0 with eligible discovery labels", len(containers))
 	} else {
 		log.Printf("Docker discovery: found %d apps (from %d containers)", len(apps), len(containers))
 	}
