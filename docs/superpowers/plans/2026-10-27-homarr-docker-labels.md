@@ -47,5 +47,5 @@
 
 - [x] Document example Homarr labels, precedence, hide behavior, ignored fields, and review step in README and settings hint.
 - [x] Run the discovery inbox Playwright check, `go test ./... -count=1`, and `gofmt` verification.
-- [ ] Review security, code behavior, and usability against the spec and address material findings.
-- [ ] Commit documentation and verified fixes; open a PR and confirm CI.
+- [x] Review security, code behavior, and usability against the spec and address material findings; the fresh review found no actionable issues.
+- [x] Commit documentation and verified fixes; open PR #39 and confirm Build & Test, E2E Tests, and Docker Build & Push all passed.
