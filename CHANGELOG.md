@@ -6,13 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [1.5.11] - 2026-10-27
 
-### Added
+### Improved
 
-- **Homarr Docker label discovery** — when Docker discovery is enabled, containers with `homarr.name` and an HTTP(S) `homarr.href` appear in the existing admin discovery inbox. DashGate also reads optional `homarr.description`. Homarr labels take precedence over Homepage labels, while explicit `dashgate.enable` labels keep highest priority. The presence of `homarr.hide` excludes a Homarr-labeled route.
+- **Docker discovery compatibility** — containers using an additional service-label format can enter the existing admin discovery inbox. DashGate reads only the display name, HTTP(S) URL, and optional description. Explicit DashGate labels keep priority, and admins review each route before publishing.
 
 ### Upgrade
 
-- No database migration or new configuration is required. Back up the persistent `/config` directory before upgrading. Existing Homarr-labeled containers may now appear in the inbox, but are not published automatically. Review the URL, category, icon, and access groups before publishing. Homarr group, board, icon, ping, integration, and widget labels are not imported into DashGate.
+- No database migration or new configuration is required. Back up the persistent `/config` directory before upgrading. Newly recognized routes may appear in the inbox, but are not published automatically. Review the URL, category, icon, and access groups before publishing. Third-party group, board, icon, ping, integration, and widget labels are not imported into DashGate.
 
 ## [1.5.10] - 2026-10-26
 

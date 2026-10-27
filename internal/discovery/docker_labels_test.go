@@ -44,21 +44,21 @@ func TestDockerHomepageLabels(t *testing.T) {
 	}
 }
 
-func TestDockerHomarrLabels(t *testing.T) {
+func TestDockerAlternateServiceLabels(t *testing.T) {
 	cases := []struct {
 		name   string
 		labels map[string]string
 		want   *models.App
 	}{
-		{"homarr route", map[string]string{"homarr.name": "Sonarr", "homarr.href": "https://sonarr.example.test", "homarr.description": "Series", "homarr.group": "Media", "homarr.icon": "https://icons.test/sonarr.svg", "homarr.ping": "https://internal.test", "homarr.integration": "sonarr", "homarr.widget": "calendar"}, &models.App{Name: "Sonarr", URL: "https://sonarr.example.test", Description: "Series", Status: "online"}},
-		{"homarr wins over homepage", map[string]string{"homarr.name": "Homarr", "homarr.href": "https://homarr.example.test", "homepage.name": "Homepage", "homepage.href": "https://homepage.example.test", "homepage.description": "Homepage description"}, &models.App{Name: "Homarr", URL: "https://homarr.example.test", Status: "online"}},
-		{"dashgate wins over homarr", map[string]string{"dashgate.enable": "true", "dashgate.name": "DashGate", "dashgate.url": "https://dashgate.example.test", "homarr.name": "Homarr", "homarr.href": "https://homarr.example.test"}, &models.App{Name: "DashGate", URL: "https://dashgate.example.test", Status: "online"}},
-		{"dashgate disable wins", map[string]string{"dashgate.enable": "false", "homarr.name": "Homarr", "homarr.href": "https://homarr.example.test"}, nil},
-		{"missing homarr href does not fall back", map[string]string{"homarr.name": "Homarr", "homepage.name": "Homepage", "homepage.href": "https://homepage.example.test"}, nil},
-		{"invalid homarr scheme", map[string]string{"homarr.name": "Homarr", "homarr.href": "javascript:alert(1)"}, nil},
-		{"homarr URL userinfo", map[string]string{"homarr.name": "Homarr", "homarr.href": "https://user:secret@homarr.example.test"}, nil},
-		{"homarr hide by presence", map[string]string{"homarr.name": "Homarr", "homarr.href": "https://homarr.example.test", "homarr.hide": ""}, nil},
-		{"homepage fallback when homarr name absent", map[string]string{"homarr.href": "https://homarr.example.test", "homepage.name": "Homepage", "homepage.href": "https://homepage.example.test"}, &models.App{Name: "Homepage", URL: "https://homepage.example.test", Status: "online"}},
+		{"alternate route", map[string]string{"homarr.name": "Sonarr", "homarr.href": "https://sonarr.example.test", "homarr.description": "Series", "homarr.group": "Media", "homarr.icon": "https://icons.test/sonarr.svg", "homarr.ping": "https://internal.test", "homarr.integration": "sonarr", "homarr.widget": "calendar"}, &models.App{Name: "Sonarr", URL: "https://sonarr.example.test", Description: "Series", Status: "online"}},
+		{"alternate takes precedence over Homepage", map[string]string{"homarr.name": "Alternate", "homarr.href": "https://alternate.example.test", "homepage.name": "Homepage", "homepage.href": "https://homepage.example.test", "homepage.description": "Homepage description"}, &models.App{Name: "Alternate", URL: "https://alternate.example.test", Status: "online"}},
+		{"DashGate takes precedence", map[string]string{"dashgate.enable": "true", "dashgate.name": "DashGate", "dashgate.url": "https://dashgate.example.test", "homarr.name": "Alternate", "homarr.href": "https://alternate.example.test"}, &models.App{Name: "DashGate", URL: "https://dashgate.example.test", Status: "online"}},
+		{"DashGate disable takes precedence", map[string]string{"dashgate.enable": "false", "homarr.name": "Alternate", "homarr.href": "https://alternate.example.test"}, nil},
+		{"missing href does not fall back", map[string]string{"homarr.name": "Alternate", "homepage.name": "Homepage", "homepage.href": "https://homepage.example.test"}, nil},
+		{"invalid URL scheme", map[string]string{"homarr.name": "Alternate", "homarr.href": "javascript:alert(1)"}, nil},
+		{"URL userinfo", map[string]string{"homarr.name": "Alternate", "homarr.href": "https://user:secret@alternate.example.test"}, nil},
+		{"hide by presence", map[string]string{"homarr.name": "Alternate", "homarr.href": "https://alternate.example.test", "homarr.hide": ""}, nil},
+		{"Homepage fallback when alternate name absent", map[string]string{"homarr.href": "https://alternate.example.test", "homepage.name": "Homepage", "homepage.href": "https://homepage.example.test"}, &models.App{Name: "Homepage", URL: "https://homepage.example.test", Status: "online"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
