@@ -32,12 +32,12 @@
 
 **Interfaces:** `dockerContainerApp(models.DockerContainer) *models.App` keeps its signature and returns at most one app. The Homarr branch is selected by presence of `homarr.name` after explicit DashGate labels.
 
-- [ ] Add table cases with literal expected name, URL, description, status, empty groups and icon: Homarr-only; Homarr-over-Homepage; DashGate-over-Homarr; DashGate-disabled; incomplete Homarr; malformed URL; `homarr.hide` with empty value; Homepage fallback when Homarr name is absent; ignored Homarr metadata.
-- [ ] Run `go test ./internal/discovery -run TestDockerHomepageLabels -count=1` and confirm missing Homarr behavior fails.
-- [ ] Implement the minimal Homarr branch and shared URL validation as needed, leaving DashGate behavior intact.
-- [ ] Run focused discovery tests and then `go test ./... -count=1`; confirm green.
-- [ ] Add a scan-level case proving Homarr metadata reaches the Docker source and verify it red then green.
-- [ ] Commit code and tests.
+- [x] Add table cases with literal expected name, URL, description, status, empty groups and icon: Homarr-only; Homarr-over-Homepage; DashGate-over-Homarr; DashGate-disabled; incomplete Homarr; malformed URL; `homarr.hide` with empty value; Homepage fallback when Homarr name is absent; ignored Homarr metadata.
+- [x] Run `go test ./internal/discovery -run TestDockerHomarrLabels -count=1` and confirm missing Homarr behavior fails.
+- [x] Implement the minimal Homarr branch and shared URL validation as needed, leaving DashGate behavior intact.
+- [x] Run focused discovery tests and then `go test ./... -count=1`; confirm green.
+- [x] Add a scan-level case proving Homarr metadata reaches the Docker source. The mapper cases already failed on the baseline; this supplementary scan case exercises the existing Docker pipeline.
+- [x] Commit code and tests.
 
 ### Task 2: Documentation and final validation
 
@@ -45,7 +45,7 @@
 
 **Interfaces:** No API change. Admins continue to configure category, icon, and access groups before publication.
 
-- [ ] Document example Homarr labels, precedence, hide behavior, ignored fields, and review step in README and settings hint.
-- [ ] Run relevant UI checks, `go test ./... -count=1`, and `gofmt` verification.
+- [x] Document example Homarr labels, precedence, hide behavior, ignored fields, and review step in README and settings hint.
+- [x] Run the discovery inbox Playwright check, `go test ./... -count=1`, and `gofmt` verification.
 - [ ] Review security, code behavior, and usability against the spec and address material findings.
 - [ ] Commit documentation and verified fixes; open a PR and confirm CI.

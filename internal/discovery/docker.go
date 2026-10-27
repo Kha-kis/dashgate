@@ -187,7 +187,7 @@ func scanDockerApps(app *server.App) (server.DiscoveryScanResult, string) {
 	}
 
 	if len(apps) == 0 && len(containers) > 0 {
-		log.Printf("Docker discovery: found %d containers, 0 with eligible DashGate or Homepage labels", len(containers))
+		log.Printf("Docker discovery: found %d containers, 0 with eligible DashGate, Homarr, or Homepage labels", len(containers))
 	} else {
 		log.Printf("Docker discovery: found %d apps (from %d containers)", len(apps), len(containers))
 	}
@@ -229,8 +229,18 @@ func dockerContainerApp(c models.DockerContainer) *models.App {
 		return a
 	}
 
-	name := strings.TrimSpace(c.Labels["homepage.name"])
-	appURL := strings.TrimSpace(c.Labels["homepage.href"])
+	if _, present := c.Labels["homarr.name"]; present {
+		if _, hidden := c.Labels["homarr.hide"]; hidden {
+			return nil
+		}
+		return dockerLabelApp(c.Labels["homarr.name"], c.Labels["homarr.href"], c.Labels["homarr.description"], c.State)
+	}
+	return dockerLabelApp(c.Labels["homepage.name"], c.Labels["homepage.href"], c.Labels["homepage.description"], c.State)
+}
+
+func dockerLabelApp(rawName, rawURL, description, state string) *models.App {
+	name := strings.TrimSpace(rawName)
+	appURL := strings.TrimSpace(rawURL)
 	if name == "" || appURL == "" {
 		return nil
 	}
@@ -238,10 +248,10 @@ func dockerContainerApp(c models.DockerContainer) *models.App {
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil {
 		return nil
 	}
-	// Homepage's group is a visual category, whereas DashGate groups grant
-	// access. Homepage icons and widget labels are also not DashGate assets.
-	a := &models.App{Name: name, URL: appURL, Description: c.Labels["homepage.description"]}
-	setDockerStatus(a, c.State)
+	// Third-party labels supply display metadata only, never DashGate access
+	// groups, health URLs, widgets, or icon assets.
+	a := &models.App{Name: name, URL: appURL, Description: description}
+	setDockerStatus(a, state)
 	return a
 }
 

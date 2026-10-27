@@ -220,6 +220,17 @@ labels:
 
 The route appears in the existing discovery inbox for admin review. Only the name, HTTP(S) URL, and description are read. Homepage's `group` is a display category and is never used as a DashGate access group; `icon` and `widget.*` labels are not imported. Configure the category, icon, and access groups in DashGate before publishing. An explicit `dashgate.enable=false` excludes a container, and `dashgate.enable=true` uses only DashGate labels.
 
+Homarr Docker labels work in the same inbox:
+
+```yaml
+labels:
+  - "homarr.name=My App"
+  - "homarr.href=https://app.example.com"
+  - "homarr.description=Description" # optional
+```
+
+When both Homarr and Homepage labels are present, Homarr takes precedence. `homarr.name` requires a valid HTTP(S) `homarr.href`; incomplete Homarr metadata does not fall back to Homepage. The presence of `homarr.hide` excludes a Homarr-labeled route. If `homarr.name` is absent, Homepage discovery still works. Only Homarr's name, URL, and description are read. DashGate does not import Homarr's group, board, icon, ping address, integration, widget, or other labels. Choose the DashGate category, icon, and access groups in Configure before publishing. Explicit `dashgate.enable` labels take priority over both third-party formats.
+
 Requires mounting the Docker socket: `-v /var/run/docker.sock:/var/run/docker.sock:ro`
 
 **Using a Docker Socket Proxy (recommended for security):**
