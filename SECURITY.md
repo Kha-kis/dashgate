@@ -2,9 +2,7 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-|---------|--------------------|
-| 1.0.x   | Yes                |
+Security fixes are targeted at the latest release. Upgrade to the newest published version before reporting a problem that may already be fixed.
 
 ## Reporting a Vulnerability
 
@@ -62,6 +60,6 @@ This application handles authentication credentials and session management. The 
 3. **Configure trusted proxies** — if using proxy auth, restrict accepted IPs to your reverse proxy
 4. **Set `COOKIE_SECURE=true`** — ensure session cookies require HTTPS (default)
 5. **Review audit logs** — monitor the `/api/admin/audit-log` endpoint
-6. **Restrict Docker socket access** — if using Docker discovery, mount the socket read-only (`:ro`)
+6. **Restrict Docker API access** — prefer a socket proxy limited to the API sections and methods discovery needs. A `:ro` bind mount of `/var/run/docker.sock` does not make Docker API access read-only; anyone who can connect to the socket may gain broad daemon privileges. See the [Docker discovery setup](README.md#docker).
 7. **Use strong passwords** — enforce passwords well above the 8-character minimum
 8. **Keep updated** — apply security patches promptly

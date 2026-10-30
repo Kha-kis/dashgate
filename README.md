@@ -1,6 +1,8 @@
 # DashGate
 
-A self-hosted application gateway for managing and accessing your web services. Features multi-method authentication, group-based access control, automatic app discovery from Docker/Traefik/Nginx/NPM/Caddy, and real-time health monitoring.
+DashGate is a self-hosted dashboard for people who run several web services and need control over who sees each app. Sign in with local accounts, LDAP, OIDC, or a trusted reverse proxy; organize apps by group; and review routes found by Docker or a reverse proxy before publishing them.
+
+[Try DashGate in five minutes](docs/first-five-minutes.md) · [Deployment and upgrades](docs/deployment.md) · [Security policy](SECURITY.md)
 
 ![DashGate Dashboard](docs/screenshots/dashboard.png)
 
@@ -39,7 +41,7 @@ mkdir -p config
 docker run -d \
   --name dashgate \
   -p 1738:1738 \
-  -v ./config:/config \
+  -v "$(pwd)/config:/config" \
   -e PUID=1000 \
   -e PGID=1000 \
   --restart unless-stopped \
@@ -220,7 +222,7 @@ labels:
 
 The route appears in the existing discovery inbox for admin review. Only the name, HTTP(S) URL, and description are read. Homepage's `group` is a display category and is never used as a DashGate access group; `icon` and `widget.*` labels are not imported. Configure the category, icon, and access groups in DashGate before publishing. An explicit `dashgate.enable=false` excludes a container, and `dashgate.enable=true` uses only DashGate labels.
 
-Requires mounting the Docker socket: `-v /var/run/docker.sock:/var/run/docker.sock:ro`
+Docker discovery needs access to the Docker API. A direct socket mount such as `-v /var/run/docker.sock:/var/run/docker.sock:ro` grants broad daemon access: `:ro` protects the mounted socket file from filesystem writes but does not make API operations read-only. Prefer a socket proxy limited to the API sections and methods discovery needs.
 
 **Using a Docker Socket Proxy (recommended for security):**
 
@@ -231,7 +233,8 @@ services:
   socket-proxy:
     image: tecnativa/docker-socket-proxy
     environment:
-      - CONTAINERS=1 # Only allow container listing
+      - CONTAINERS=1 # Allow the container API section
+      - POST=0       # Disable write methods
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
