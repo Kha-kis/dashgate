@@ -20,7 +20,7 @@ Open <http://localhost:1738> and complete the setup wizard. Local authentication
 
 ## 2. Add an app
 
-Sign in as the administrator, open **Settings > Admin > Content**, and select **Add App**. Enter the name and URL of a service you run, then choose a category. Assign access groups if only some signed-in users should see it. An app without groups is visible to every authenticated user.
+Sign in as the administrator, open **Settings > Admin > Content**, and select **Add App**. Enter the name and URL of a service you run, then choose a category. Assign an access group that matches the users who should see the app. A manually added app with no groups is visible only to admins.
 
 The dashboard groups your apps by category and checks their health in the background. Open **Settings > Admin > Users > Explain App Access** to see why a saved user can or cannot see a particular app.
 
