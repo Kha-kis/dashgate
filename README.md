@@ -4,7 +4,7 @@ DashGate is a self-hosted dashboard for people who run several web services and 
 
 [Try DashGate in five minutes](docs/first-five-minutes.md) · [Deployment and upgrades](docs/deployment.md) · [Security policy](SECURITY.md)
 
-![DashGate Dashboard](docs/screenshots/dashboard.png)
+![DashGate dashboard with sample apps](docs/screenshots/dashboard-current.jpg)
 
 ![DashGate Login](docs/screenshots/login.png)
 
