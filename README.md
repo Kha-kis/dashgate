@@ -2,7 +2,7 @@
 
 DashGate is a self-hosted dashboard for people who run several web services and need control over who sees each app. Sign in with local accounts, LDAP, OIDC, or a trusted reverse proxy; organize apps by group; and review routes found by Docker or a reverse proxy before publishing them.
 
-[Try DashGate in five minutes](docs/first-five-minutes.md) · [Watch the 20-second demo](docs/demo/dashgate-tour.mp4) · [Deployment and upgrades](docs/deployment.md) · [Discussions](https://github.com/Kha-kis/dashgate/discussions) · [Security policy](SECURITY.md)
+[Try DashGate in five minutes](docs/first-five-minutes.md) · [Watch the 20-second demo](https://cdn.jsdelivr.net/gh/Kha-kis/dashgate@1e89d49/docs/demo/dashgate-tour.mp4) · [Deployment and upgrades](docs/deployment.md) · [Discussions](https://github.com/Kha-kis/dashgate/discussions) · [Security policy](SECURITY.md)
 
 The demo uses an isolated DashGate instance and a sample discovered route.
 
